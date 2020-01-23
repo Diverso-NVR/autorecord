@@ -97,7 +97,7 @@ class RecordHandler():
         if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
             for source in room_sources:
                 self.add_sound(record_name,
-                               source.split('/')[0].split('.')[-1])
+                               source.ip.split('/')[0].split('.')[-1])
             os.remove(f'{HOME}/vids/sound_{record_name}.aac')
         else:
             res = "vid_"
@@ -121,4 +121,7 @@ class RecordHandler():
                                      ".mp4", "-y", "-shortest", "-c", "copy",
                                      HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
             proc.wait()
-            os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+            try:
+                os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+            except:
+                pass
