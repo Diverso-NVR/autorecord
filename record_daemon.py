@@ -37,5 +37,4 @@ class DaemonApp():
 
 
 daemon_app = DaemonApp()
-# daemon_app.run()
-daemon_app.start_new_recording()
+daemon_app.run()
