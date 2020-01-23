@@ -19,7 +19,7 @@ class RecordHandler():
     processes = {}
     record_names = {}
 
-    def config(self, room_id: int, name: str, sources: list) -> None:
+    def config(self, room_id: int, name: str) -> None:
         self.rooms[room_id] = {"name": name}
         self.processes[room_id] = []
 
@@ -38,43 +38,39 @@ class RecordHandler():
 
         self.record_names[room_id] = f"{today.year}-{month}-{day}_{hour}:{minute}_{self.rooms[room_id]['name']}_"
 
-        self.rooms[room_id]['sound'] = {'cam': [], 'enc': []}
-        self.rooms[room_id]['vid'] = []
-
-        for cam in sources:
-            self.rooms[room_id]['vid'].append(cam['ip'])
-            if cam['sound'] in ['cam', 'enc']:
-                self.rooms[room_id]['sound'][cam['sound']].append(cam['ip'])
-            if cam['main_cam']:
-                self.rooms[room_id]['main_cam'] = cam['ip']
-            if cam['tracking']:
-                self.rooms[room_id]['tracking'] = cam['ip']
-
     def start_record(self, room: Room) -> None:
-        self.config(room.id, room.name, [source.to_dict()
-                                         for source in room.sources])
+        self.config(room.id, room.name)
 
         room_id = room.id
 
-        if room.chosen_sound == "enc":
-            enc = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i rtsp://" +
-                                   self.rooms[room_id]['sound']['enc'][0] +
-                                   " -y -c:a copy -vn -f mp4 " + HOME + "/vids/sound_"
-                                   + self.record_names[room_id] + ".aac", shell=True, preexec_fn=os.setsid)
-            self.processes[room_id].append(enc)
-        else:
-            camera = subprocess.Popen("ffmpeg -rtsp_transport tcp -i rtsp://" +
-                                      self.rooms[room_id]['sound']['cam'][0] +
-                                      " -y -c:a copy -vn -f mp4 " + HOME + "/vids/sound_"
-                                      + self.record_names[room_id] + ".aac", shell=True, preexec_fn=os.setsid)
-            self.processes[room_id].append(camera)
+        sound = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i rtsp://" +
+                                 room.sound_source +
+                                 " -y -c:a copy -vn -f mp4 " + HOME + "/vids/sound_"
+                                 + self.record_names[room_id] + ".aac", shell=True, preexec_fn=os.setsid)
+        self.processes[room_id].append(sound)
 
-        for cam in self.rooms[room_id]['vid']:
+        for source in room.sources:
             process = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i rtsp://" +
-                                       cam + " -y -c:v copy -an -f mp4 " + HOME + "/vids/vid_" +
-                                       self.record_names[room_id] + cam.split('/')[0].split('.')[-1] + ".mp4", shell=True,
+                                       source.ip + " -y -c:v copy -an -f mp4 " + HOME + "/vids/vid_" +
+                                       self.record_names[room_id] + source.ip.split('/')[0].split('.')[-1] + ".mp4", shell=True,
                                        preexec_fn=os.setsid)
             self.processes[room_id].append(process)
+
+    def kill_records(self, room: Room) -> bool:
+        try:
+            for process in self.processes[room.id]:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except OSError:
+                    os.system("kill %s" % (process.pid))
+
+            del self.processes[room.id]
+
+            Thread(target=self.prepare_records_and_upload, args=(room,)).start()
+
+            return True
+        except KeyError:
+            return False
 
     def prepare_records_and_upload(self, room: Room, calendar_id: str = None, event_id: str = None) -> None:
         record_name = self.record_names[room.id]
@@ -95,37 +91,22 @@ class RecordHandler():
                 time, date_folder_url.split('/')[-1])
 
         Thread(target=self.sync_and_upload, args=(
-            room.id, record_name, self.rooms[room.id]['vid'], time_folder_url.split('/')[-1])).start()
-
-    def kill_records(self, room: Room) -> bool:
-        try:
-            for process in self.processes[room.id]:
-                try:
-                    os.killpg(process.pid, signal.SIGTERM)
-                except OSError:
-                    os.system("kill %s" % (process.pid))
-
-            del self.processes[room.id]
-
-            Thread(target=self.prepare_records_and_upload, args=(room,)).start()
-
-            return True
-        except KeyError:
-            return False
+            room.id, record_name, room.sources, time_folder_url.split('/')[-1])).start()
 
     def sync_and_upload(self, room_id: int, record_name: str, room_sources: list, folder_id: str) -> None:
         res = ""
         if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
-            for cam in room_sources:
+            for source in room_sources:
                 self.add_sound(record_name,
-                               cam.split('/')[0].split('.')[-1])
+                               source.split('/')[0].split('.')[-1])
+            os.remove(f'{HOME}/vids/sound_{record_name}.aac')
         else:
             res = "vid_"
 
-        for cam in room_sources:
+        for source in room_sources:
             try:
                 file_name = res + record_name + \
-                    cam.split('/')[0].split('.')[-1] + ".mp4"
+                    source.ip.split('/')[0].split('.')[-1] + ".mp4"
 
                 upload(HOME + "/vids/" + file_name,
                        folder_id)
@@ -141,3 +122,4 @@ class RecordHandler():
                                      ".mp4", "-y", "-shortest", "-c", "copy",
                                      HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
             proc.wait()
+            os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
