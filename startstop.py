@@ -40,7 +40,9 @@ class RecordHandler():
 
     def start_record(self, room: Room) -> None:
         self.config(room.id, room.name)
-
+        print(room.to_dict())
+        print(room.name)
+        print(room.sound_source)
         room_id = room.id
 
         sound = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i rtsp://" +
