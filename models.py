@@ -8,19 +8,19 @@ Base = declarative_base()
 class Room(Base):
     __tablename__ = 'rooms'
 
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    free = db.Column(db.Boolean, default=True)
-    tracking_state = db.Column(db.Boolean, default=False)
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    free = Column(Boolean, default=True)
+    tracking_state = Column(Boolean, default=False)
 
-    sound_source = db.Column(db.String(100), default='0')
-    main_source = db.Column(db.String(100), default='0')
-    tracking_source = db.Column(db.String(100), default='0')
-    screen_source = db.Column(db.String(100), default='0')
+    sound_source = Column(String(100), default='0')
+    main_source = Column(String(100), default='0')
+    tracking_source = Column(String(100), default='0')
+    screen_source = Column(String(100), default='0')
 
-    sources = db.relationship('Source', backref='room', lazy=False)
-    drive = db.Column(db.String(200))
-    calendar = db.Column(db.String(200))
+    sources = relationship('Source', backref='room', lazy=False)
+    drive = Column(String(200))
+    calendar = Column(String(200))
 
     def to_dict(self):
         return dict(id=self.id,
@@ -39,10 +39,10 @@ class Room(Base):
 class Source(Base):
     __tablename__ = 'sources'
 
-    id = db.Column(db.Integer, primary_key=True)
-    ip = db.Column(db.String(200), default='0')
-    name = db.Column(db.String(100), default='источник')
-    room_id = db.Column(db.Integer, db.ForeignKey('rooms.id'))
+    id = Column(Integer, primary_key=True)
+    ip = Column(String(200), default='0')
+    name = Column(String(100), default='источник')
+    room_id = Column(Integer, ForeignKey('rooms.id'))
 
     def __init__(self, **kwargs):
         self.ip = kwargs.get('ip')
