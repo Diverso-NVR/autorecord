@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import RLock, Thread
 
 from models import Room
-from driveAPI import upload, create_folder, get_folder_by_name
+from drive_api import upload, create_folder, get_folder_by_name
 
 
 HOME = str(Path.home())
