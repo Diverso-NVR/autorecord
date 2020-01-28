@@ -1,19 +1,18 @@
-import schedule
-import time
 import os
-from multiprocessing import Pool
+import time
+
+import schedule
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from models import Room
 from startstop import RecordHandler
 
-
 engine = create_engine(os.environ.get('SQLALCHEMY_DATABASE_URI'))
 Session = sessionmaker(bind=engine)
 
 
-class DaemonApp():
+class DaemonApp:
     rooms = None
     record_handler = RecordHandler()
 
