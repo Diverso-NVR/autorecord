@@ -59,7 +59,7 @@ class RecordHandler:
                 try:
                     os.killpg(process.pid, signal.SIGTERM)
                 except OSError:
-                    os.system("kill %s" % (process.pid))
+                    os.system("kill %s" % process.pid)
 
             del self.processes[room.id]
 
