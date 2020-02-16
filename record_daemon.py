@@ -1,9 +1,6 @@
-import os
 import time
 
 import schedule
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from models import Room, Session
 from startstop import RecordHandler
