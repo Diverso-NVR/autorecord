@@ -1,9 +1,10 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, sessionmaker
 
 Base = declarative_base()
-
+engine = create_engine(os.environ.get('SQLALCHEMY_DATABASE_URI'))
+Session = sessionmaker(bind=engine)
 
 class Room(Base):
     __tablename__ = 'rooms'
