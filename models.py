@@ -14,7 +14,6 @@ class Room(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
-    free = Column(Boolean, default=True)
     tracking_state = Column(Boolean, default=False)
 
     sound_source = Column(String(100), default='0')
@@ -29,7 +28,6 @@ class Room(Base):
     def to_dict(self):
         return dict(id=self.id,
                     name=self.name,
-                    free=self.free,
                     tracking_state=self.tracking_state,
                     sound_source=self.sound_source,
                     main_source=self.main_source,
