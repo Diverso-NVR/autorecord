@@ -5,4 +5,4 @@ COPY . /autorecord
 RUN pip3 install --no-cache-dir -r /autorecord/requirements.txt
 RUN mkdir /root/vids
 
-CMD ["python3", "/autorecord/record_daemon.py"]
+CMD ["python3", "/autorecord/app.py"]

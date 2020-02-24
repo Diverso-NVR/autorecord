@@ -20,8 +20,11 @@ class DaemonApp:
         session.close()
 
         for room in self.rooms:
-            self.record_handler.kill_records(room)
-            self.record_handler.start_record(room)
+            try:
+                self.record_handler.kill_records(room)
+                self.record_handler.start_record(room)
+            except:
+                pass
 
     def run(self):
         while True:
