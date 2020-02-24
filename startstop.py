@@ -46,9 +46,9 @@ class RecordHandler:
         self.processes[room_id].append(sound)
 
         for source in room.sources:
-            process = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i rtsp://" +
-                                       source.ip + " -y -c:v copy -an -f mp4 " + HOME + "/vids/vid_" +
-                                       self.record_names[room_id] + source.ip.split('/')[0].split('.')[-1] + ".mp4",
+            process = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i " +
+                                       source.rtsp + " -y -c:v copy -an -f mp4 " + HOME + "/vids/vid_" +
+                                       self.record_names[room_id] + source.ip.split('.')[-1] + ".mp4",
                                        shell=True,
                                        preexec_fn=os.setsid)
             self.processes[room_id].append(process)
@@ -93,7 +93,7 @@ class RecordHandler:
         if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
             for source in room_sources:
                 self.add_sound(record_name,
-                               source.ip.split('/')[0].split('.')[-1])
+                               source.ip.split('.')[-1])
             os.remove(f'{HOME}/vids/sound_{record_name}.aac')
         else:
             res = "vid_"
@@ -101,7 +101,7 @@ class RecordHandler:
         for source in room_sources:
             try:
                 file_name = res + record_name + \
-                            source.ip.split('/')[0].split('.')[-1] + ".mp4"
+                            source.ip.split('.')[-1] + ".mp4"
 
                 upload(HOME + "/vids/" + file_name,
                        folder_id)
