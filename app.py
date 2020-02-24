@@ -29,5 +29,6 @@ class DaemonApp:
             time.sleep(1)
 
 
-daemon_app = DaemonApp()
-daemon_app.run()
+if __name__ == "__main__":
+    daemon_app = DaemonApp()
+    daemon_app.run()

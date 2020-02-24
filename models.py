@@ -26,19 +26,6 @@ class Room(Base):
 
     auto_control = Column(Boolean, default=True)
 
-    def to_dict(self):
-            return dict(id=self.id,
-                        name=self.name,
-                        tracking_state=self.tracking_state,
-                        sources=[source.to_dict() for source in self.sources],
-                        drive=self.drive,
-                        calendar=self.calendar,
-                        sound_source=self.sound_source,
-                        main_source=self.main_source,
-                        tracking_source=self.tracking_source,
-                        screen_source=self.screen_source,
-                        auto_control=self.auto_control)
-
 
 class Source(Base):
     __tablename__ = 'sources'
@@ -52,34 +39,3 @@ class Source(Base):
     merge = Column(String(200))
     tracking = Column(String(200))
     room_id = Column(Integer, ForeignKey('rooms.id'))
-
-    def __init__(self, **kwargs):
-        self.name = kwargs.get('name')
-        self.ip = kwargs.get('ip')
-        self.port = kwargs.get('port')
-        self.rtsp = kwargs.get('rtsp')
-        self.audio = kwargs.get('audio')
-        self.merge = kwargs.get('merge')
-        self.tracking = kwargs.get('tracking')
-        self.room_id = kwargs.get('room_id')
-
-    def update(self, **kwargs):
-        self.name = kwargs.get('name')
-        self.ip = kwargs.get('ip')
-        self.port = kwargs.get('port')
-        self.rtsp = kwargs.get('rtsp')
-        self.audio = kwargs.get('audio')
-        self.merge = kwargs.get('merge')
-        self.tracking = kwargs.get('tracking')
-        self.room_id = kwargs.get('room_id')
-
-    def to_dict(self):
-        return dict(id=self.id,
-                    name=self.name,
-                    ip=self.ip,
-                    port=self.port,
-                    rtsp=self.rtsp,
-                    audio=self.audio,
-                    merge=self.audio,
-                    tracking=self.tracking,
-                    room_id=self.room_id)
