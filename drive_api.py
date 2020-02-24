@@ -16,8 +16,8 @@ SCOPES = 'https://www.googleapis.com/auth/drive'
 Setting up drive
 """
 creds = None
-token_path = '/autorecord/creds/tokenDrive.pickle'
-creds_path = '/autorecord/creds/credentials.json'
+token_path = '/autorecord/.creds/tokenDrive.pickle'
+creds_path = '/autorecord/.creds/credentials.json'
 
 if os.path.exists(token_path):
     with open(token_path, 'rb') as token:
