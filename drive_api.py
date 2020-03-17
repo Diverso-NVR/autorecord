@@ -67,7 +67,7 @@ def upload(filename: str, folder_id: str) -> str:
     with lock:
         media = MediaFileUpload(filename, mimetype="video/mp4", resumable=True)
         file_data = {
-            "name": filename.split('/')[4],
+            "name": filename.split('/')[-1],
             "parents": [folder_id]
         }
         file = drive_service.files().create(

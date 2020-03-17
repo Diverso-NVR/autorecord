@@ -4,7 +4,7 @@ import signal
 import subprocess
 from pathlib import Path
 from threading import RLock, Thread
-
+import pytz
 from drive_api import upload, create_folder, get_folder_by_name
 from models import Room
 
@@ -22,7 +22,7 @@ class RecordHandler:
         self.processes[room_id] = []
 
         today = datetime.date.today()
-        current_time = datetime.datetime.now().time()
+        current_time = datetime.datetime.now(tz=pytz.timezone('Europe/Moscow')).time()
         month = "0" + \
                 str(today.month) if today.month < 10 else str(today.month)
         day = "0" + \
