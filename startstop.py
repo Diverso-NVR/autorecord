@@ -20,9 +20,10 @@ class RecordHandler:
     def config(self, room_id: int, name: str) -> None:
         self.rooms[room_id] = {"name": name}
         self.processes[room_id] = []
-
-        today = datetime.date.today()
-        current_time = datetime.datetime.now(tz=pytz.timezone('Europe/Moscow')).time()
+        
+        current_date = datetime.datetime.now(tz=pytz.timezone('Europe/Moscow'))
+        today = current_date.date()
+        current_time = current_date.time()
         month = "0" + \
                 str(today.month) if today.month < 10 else str(today.month)
         day = "0" + \
