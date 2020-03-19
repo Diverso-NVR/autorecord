@@ -47,6 +47,9 @@ class RecordHandler:
         self.processes[room_id].append(sound)
 
         for source in room.sources:
+            if not source.rtsp:
+                continue
+            
             process = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i " +
                                        source.rtsp + " -y -c:v copy -an -f mp4 " + HOME + "/vids/vid_" +
                                        self.record_names[room_id] + source.ip.split('.')[-1] + ".mp4",
