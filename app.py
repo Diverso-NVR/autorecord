@@ -20,6 +20,9 @@ class DaemonApp:
         session.close()
 
         for room in self.rooms:
+            if not room.sources:
+                continue
+
             try:
                 self.record_handler.kill_records(room)
                 self.record_handler.start_record(room)
