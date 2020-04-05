@@ -46,7 +46,7 @@ ORM-библиотеки SQLAlchemy.
 git clone https://git.miem.hse.ru/nvr/autorecord.git
 cp .env autorecord/.env
 cd autorecord
-./run_docker.sh
+sudo ./run_docker.sh
 ```
 
 ## Авторы
