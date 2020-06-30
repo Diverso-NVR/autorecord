@@ -6,5 +6,5 @@ docker run -d \
  --name nvr_autorecord \
  --net=host \
  --env-file ../.env_nvr \
- -v /home/recorder/creds:/autorecord/creds \
+ -v $HOME/creds:/autorecord/creds \
  nvr_autorecord
