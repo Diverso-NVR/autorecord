@@ -5,8 +5,9 @@ import subprocess
 from pathlib import Path
 from threading import RLock, Thread
 import pytz
-from drive_api import upload, create_folder, get_folder_by_name
-from models import Room
+
+from .apis.drive_api import upload, create_folder, get_folder_by_name
+from .db.models import Room
 
 HOME = str(Path.home())
 
@@ -20,7 +21,7 @@ class RecordHandler:
     def config(self, room_id: int, name: str) -> None:
         self.rooms[room_id] = {"name": name}
         self.processes[room_id] = []
-        
+
         current_date = datetime.datetime.now(tz=pytz.timezone('Europe/Moscow'))
         today = current_date.date()
         current_time = current_date.time()
@@ -29,9 +30,11 @@ class RecordHandler:
         day = "0" + \
               str(today.day) if today.day < 10 else str(today.day)
         hour = "0" + \
-               str(current_time.hour) if current_time.hour < 10 else str(current_time.hour)
+               str(current_time.hour) if current_time.hour < 10 else str(
+                   current_time.hour)
         minute = "0" + \
-                 str(current_time.minute) if current_time.minute < 10 else str(current_time.minute)
+                 str(current_time.minute) if current_time.minute < 10 else str(
+                     current_time.minute)
 
         self.record_names[room_id] = f"{today.year}-{month}-{day}_{hour}:{minute}_{self.rooms[room_id]['name']}_"
 
@@ -49,10 +52,11 @@ class RecordHandler:
         for source in room.sources:
             if not source.rtsp:
                 continue
-            
+
             process = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i " +
                                        source.rtsp + " -y -c:v copy -an -f mp4 " + HOME + "/vids/vid_" +
-                                       self.record_names[room_id] + source.ip.split('.')[-1] + ".mp4",
+                                       self.record_names[room_id] +
+                                       source.ip.split('.')[-1] + ".mp4",
                                        shell=True,
                                        preexec_fn=os.setsid)
             self.processes[room_id].append(process)
@@ -105,7 +109,7 @@ class RecordHandler:
         for source in room_sources:
             try:
                 file_name = res + record_name + \
-                            source.ip.split('.')[-1] + ".mp4"
+                    source.ip.split('.')[-1] + ".mp4"
 
                 upload(HOME + "/vids/" + file_name,
                        folder_id)

@@ -1,9 +1,8 @@
 import time
-
 import schedule
 
-from models import Room, Session
-from startstop import RecordHandler
+from core.db.models import Room, Session
+from core.startstop import RecordHandler
 
 
 class DaemonApp:

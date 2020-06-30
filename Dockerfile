@@ -6,8 +6,10 @@ ENV TZ=Europe/Moscow
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt-get -y install libpq-dev postgresql postgresql-contrib
 
-COPY . /autorecord
-RUN pip3 install --no-cache-dir -r /autorecord/requirements.txt
+COPY ./autorecord /autorecord
+COPY ./requirements.txt /
+
+RUN pip3 install -r requirements.txt
 RUN mkdir /root/vids
 
 CMD ["python3", "/autorecord/app.py"]
