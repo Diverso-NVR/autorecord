@@ -38,7 +38,7 @@ ORM-библиотеки SQLAlchemy.
 необходимо создать и разместить в директории приложения. В `.env` файле 
 должна быть указата переменная окружения `SQLALCHEMY_DATABASE_URI`, 
 представляющая собой строку для подключения ORM-библиотеки к базе данных. 
-Пример: `SQLALCHEMY_DATABASE_URI=mysql+pymysql://<user>:<password>@localhost/nvr`.
+Пример: `SQLALCHEMY_DATABASE_URI=postgres://<user>:<password>@localhost/nvr`.
 
 ## Развертывание на сервере
 
