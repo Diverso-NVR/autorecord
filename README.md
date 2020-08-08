@@ -39,13 +39,15 @@ ORM-библиотеки SQLAlchemy.
 должна быть указата переменная окружения `SQLALCHEMY_DATABASE_URI`, 
 представляющая собой строку для подключения ORM-библиотеки к базе данных. 
 Пример: `SQLALCHEMY_DATABASE_URI=postgres://<user>:<password>@localhost/nvr`.
+Также необходимо загрузить в домашную директорию ключи для работы с API гугла.
+ВАЖНО: запускать без sudo, т.е. добавить текущего юзера в группу докера (sudo gpasswd -a $USER docker) и перелогиниться
 
 ## Развертывание на сервере
 
 ```bash
 git clone https://git.miem.hse.ru/nvr/autorecord.git
 cd autorecord
-sudo ./run_docker.sh
+./run_docker.sh
 ```
 
 ## Авторы
