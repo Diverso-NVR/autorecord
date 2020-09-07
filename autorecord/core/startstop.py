@@ -78,23 +78,24 @@ class RecordHandler:
             return False
 
     def prepare_records_and_upload(self, room: Room) -> None:
-        record_name = self.record_names[room.id]
-        room_folder_id = room.drive.split('/')[-1]
+        with self.lock:
+            record_name = self.record_names[room.id]
+            room_folder_id = room.drive.split('/')[-1]
 
-        date, time = record_name.split('_')[0], record_name.split('_')[1]
-        folders = get_folder_by_name(date)
+            date, time = record_name.split('_')[0], record_name.split('_')[1]
+            folders = get_folder_by_name(date)
 
-        for folder_id, folder_parent_id in folders.items():
-            if folder_parent_id == room_folder_id:
-                time_folder_url = create_folder(time, folder_id)
-                break
-        else:
-            date_folder_url = create_folder(date, room_folder_id)
-            time_folder_url = create_folder(
-                time, date_folder_url.split('/')[-1])
+            for folder_id, folder_parent_id in folders.items():
+                if folder_parent_id == room_folder_id:
+                    time_folder_url = create_folder(time, folder_id)
+                    break
+            else:
+                date_folder_url = create_folder(date, room_folder_id)
+                time_folder_url = create_folder(
+                    time, date_folder_url.split('/')[-1])
 
-        Thread(target=self.sync_and_upload, args=(
-            record_name, room.sources, time_folder_url.split('/')[-1])).start()
+            self.sync_and_upload(record_name, room.sources,
+                                 time_folder_url.split('/')[-1])
 
     def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
         res = ""
@@ -119,13 +120,9 @@ class RecordHandler:
                 print(e)
 
     def add_sound(self, record_name: str, source_id: str) -> None:
-        with self.lock:
-            proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
-                                     HOME + "/vids/vid_" + record_name + source_id +
-                                     ".mp4", "-y", "-shortest", "-c", "copy",
-                                     HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
-            proc.wait()
-            try:
-                os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
-            except:
-                pass
+        proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
+                                 HOME + "/vids/vid_" + record_name + source_id +
+                                 ".mp4", "-y", "-shortest", "-c", "copy",
+                                 HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
+        proc.wait()
+        os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
