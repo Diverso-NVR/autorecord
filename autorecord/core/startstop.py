@@ -125,4 +125,7 @@ class RecordHandler:
                                  ".mp4", "-y", "-shortest", "-c", "copy",
                                  HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
         proc.wait()
-        os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+        try:
+            os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+        except:
+            pass
