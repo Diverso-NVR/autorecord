@@ -48,9 +48,11 @@ class RecordHandler:
         day = "0" + \
               str(today.day) if today.day < 10 else str(today.day)
         hour = "0" + \
-               str(current_time.hour) if current_time.hour < 10 else str(current_time.hour)
+               str(current_time.hour) if current_time.hour < 10 else str(
+                   current_time.hour)
         minute = "0" + \
-                 str(current_time.minute) if current_time.minute < 10 else str(current_time.minute)
+                 str(current_time.minute) if current_time.minute < 10 else str(
+                     current_time.minute)
 
         self.record_names[room_id] = f"{today.year}-{month}-{day}_{hour}:{minute}_{self.rooms[room_id]['name']}_"
 
@@ -60,7 +62,8 @@ class RecordHandler:
         self.config(room.id, room.name)
         room_id = room.id
 
-        self.audio_ffmpeg_output = open(f"autorec_{room.name}_audio_log.txt", "a")
+        self.audio_ffmpeg_output = open(
+            f"autorec_{room.name}_audio_log.txt", "a")
 
         self.audio_ffmpeg_output.write(
             f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
@@ -101,7 +104,7 @@ class RecordHandler:
             for process in self.processes[room.id]:
                 self.audio_ffmpeg_output.close()
 
-                for video_output in self.video_ffmpeg_outputs:
+                for video_output in self.video_ffmpeg_outputs.values():
                     video_output.close()
 
                 try:
@@ -115,8 +118,9 @@ class RecordHandler:
 
             logger.info(f'Successfully killed records in room {room.name}')
             return True
-        except KeyError:
-            logger.error(f'Failed to kill records in room {room.name}', exc_info=True)
+        except Exception:
+            logger.error(
+                f'Failed to kill records in room {room.name}', exc_info=True)
             return False
 
     def prepare_records_and_upload(self, room: Room) -> None:
@@ -141,7 +145,8 @@ class RecordHandler:
             record_name, room.sources, time_folder_url.split('/')[-1])
 
     def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
-        logger.info(f'Syncing video and audio and uploading record {record_name} to folder {folder_id}')
+        logger.info(
+            f'Syncing video and audio and uploading record {record_name} to folder {folder_id}')
 
         res = ""
         if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
@@ -150,18 +155,20 @@ class RecordHandler:
             try:
                 os.remove(f'{HOME}/vids/sound_{record_name}.aac')
             except:
-                logger.warning(f'Failed to remove file {HOME}/vids/sound_{record_name}.aac')
+                logger.warning(
+                    f'Failed to remove file {HOME}/vids/sound_{record_name}.aac')
         else:
             res = "vid_"
 
         for source in room_sources:
             try:
                 file_name = res + record_name + \
-                            source.ip.split('.')[-1] + ".mp4"
+                    source.ip.split('.')[-1] + ".mp4"
 
                 upload(HOME + "/vids/" + file_name, folder_id)
             except:
-                logger.error(f'Failed to upload file {file_name} to folder {folder_id}', exc_info=True)
+                logger.error(
+                    f'Failed to upload file {file_name} to folder {folder_id}', exc_info=True)
 
             try:
                 os.remove(HOME + "/vids/" + file_name)
@@ -172,9 +179,11 @@ class RecordHandler:
         logger.info(f'Adding sound to record {record_name}')
 
         with self.lock:
-            add_sound_ffmpeg_output = open(f"autorec_sound_add_ffmpeg_log.txt", "a")
+            add_sound_ffmpeg_output = open(
+                f"autorec_sound_add_ffmpeg_log.txt", "a")
 
-            add_sound_ffmpeg_output.write(f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
+            add_sound_ffmpeg_output.write(
+                f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
 
             proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
                                      HOME + "/vids/vid_" + record_name + source_id +
@@ -188,4 +197,5 @@ class RecordHandler:
             try:
                 os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
             except:
-                logger.warning(f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')
+                logger.warning(
+                    f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')
