@@ -166,12 +166,16 @@ class RecordHandler:
                     source.ip.split('.')[-1] + ".mp4"
 
                 upload(HOME + "/vids/" + file_name, folder_id)
+            except FileNotFoundError:
+                pass
             except:
                 logger.error(
                     f'Failed to upload file {file_name} to folder {folder_id}', exc_info=True)
 
             try:
                 os.remove(HOME + "/vids/" + file_name)
+            except FileNotFoundError:
+                pass
             except:
                 logger.warning(f'Failed to remove file {file_name}')
 
