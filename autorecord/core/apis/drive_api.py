@@ -1,13 +1,16 @@
 from __future__ import print_function
 
+import logging
 import os.path
 import pickle
+from threading import RLock
 
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+lock = RLock()
 
 SCOPES = 'https://www.googleapis.com/auth/drive'
 """
@@ -32,57 +35,68 @@ if not creds or not creds.valid:
 
 drive_service = build('drive', 'v3', credentials=creds)
 
+logger = logging.getLogger('autorecord_logger')
+
 
 def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
     """
     Creates folder in format: 'folder_name'
     """
-    folder_metadata = {
-        'name': folder_name,
-        'mimeType': 'application/vnd.google-apps.folder'
-    }
-    if folder_parent_id:
-        folder_metadata['parents'] = [folder_parent_id]
-    folder = drive_service.files().create(body=folder_metadata,
-                                          fields='id').execute()
+    with lock:
+        logger.info(f'Creating folder with name {folder_name} inside folder with id {folder_parent_id}')
 
-    new_perm = {
-        'type': 'anyone',
-        'role': 'reader'
-    }
+        folder_metadata = {
+            'name': folder_name,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        if folder_parent_id:
+            folder_metadata['parents'] = [folder_parent_id]
+        folder = drive_service.files().create(body=folder_metadata,
+                                              fields='id').execute()
 
-    drive_service.permissions().create(
-        fileId=folder['id'], body=new_perm).execute()
+        new_perm = {
+            'type': 'anyone',
+            'role': 'reader'
+        }
 
-    return "https://drive.google.com/drive/u/1/folders/" + folder['id']
+        drive_service.permissions().create(
+            fileId=folder['id'], body=new_perm).execute()
+
+        return "https://drive.google.com/drive/u/1/folders/" + folder['id']
 
 
-def upload(filename: str, folder_id: str) -> str:
+def upload(file_name: str, folder_id: str) -> str:
     """
     Upload file "filename" on drive folder 'folder_id'
     """
-    media = MediaFileUpload(filename, mimetype="video/mp4", resumable=True)
-    file_data = {
-        "name": filename.split('/')[-1],
-        "parents": [folder_id]
-    }
-    file = drive_service.files().create(
-        body=file_data, media_body=media).execute()
-    return file.get('id')
+    with lock:
+        logger.info(f'Uploading video {file_name} to folder with id {folder_id}')
+
+        media = MediaFileUpload(file_name, mimetype="video/mp4", resumable=True)
+        file_data = {
+            "name": file_name.split('/')[-1],
+            "parents": [folder_id]
+        }
+        file = drive_service.files().create(
+            body=file_data, media_body=media).execute()
+        return file.get('id')
 
 
-def get_folder_by_name(date: str) -> dict:
-    page_token = None
+def get_folder_by_name(name: str) -> dict:
+    with lock:
+        logger.info(f'Getting the id of folder with name {name}')
 
-    while True:
-        response = drive_service.files().list(q=f"mimeType='application/vnd.google-apps.folder'"
-                                                f"and name='{date}'",
-                                                spaces='drive',
-                                                fields='nextPageToken, files(name, id, parents)',
-                                                pageToken=page_token).execute()
-        page_token = response.get('nextPageToken', None)
+        page_token = None
 
-        if page_token is None:
-            break
+        while True:
+            response = drive_service.files().list(q=f"mimeType='application/vnd.google-apps.folder'"
+                                                    f"and name='{name}'",
+                                                    spaces='drive',
+                                                    fields='nextPageToken, files(name, id, parents)',
+                                                    pageToken=page_token).execute()
+            page_token = response.get('nextPageToken', None)
 
-    return {folder['id']: folder.get('parents', [''])[0] for folder in response['files']}
+            if page_token is None:
+                break
+
+        return {folder['id']: folder.get('parents', [''])[0] for folder in response['files']}
