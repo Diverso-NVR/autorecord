@@ -16,6 +16,7 @@ HOME = str(Path.home())
 class RecordHandler:
     def __init__(self):
         self.q = queue.Queue()
+        self.lock = threading.RLock()
         self.rooms = {}
         self.processes = {}
         self.record_names = {}
@@ -128,12 +129,13 @@ class RecordHandler:
                 print(e)
 
     def add_sound(self, record_name: str, source_id: str) -> None:
-        proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
-                                 HOME + "/vids/vid_" + record_name + source_id +
-                                 ".mp4", "-y", "-shortest", "-c", "copy",
-                                 HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
-        proc.wait()
-        try:
-            os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
-        except:
-            pass
+        with self.lock:
+            proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
+                                     HOME + "/vids/vid_" + record_name + source_id +
+                                     ".mp4", "-y", "-shortest", "-c", "copy",
+                                     HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
+            proc.wait()
+            try:
+                os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+            except:
+                pass
