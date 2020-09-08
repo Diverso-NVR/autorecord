@@ -7,5 +7,5 @@ docker run -d \
  --net=host \
  --env-file ../.env_nvr \
  -v $HOME/creds:/autorecord/creds \
- -v /var/log/autorecord:/var/log/autorecord
+ -v /var/log/autorecord:/var/log/autorecord \
  nvr_autorecord
