@@ -24,8 +24,8 @@ class RecordHandler:
 
     def worker(self):
         while True:
-            room = self.q.get()
-            self.prepare_records_and_upload(room)
+            callback, args = self.q.get()
+            callback(*args)
             self.q.task_done()
 
     def config(self, room_id: int, name: str) -> None:
@@ -81,7 +81,7 @@ class RecordHandler:
 
             del self.processes[room.id]
 
-            self.q.put(room)
+            self.q.put((prepare_records_and_upload, (room,)))
 
             return True
         except KeyError:
@@ -110,9 +110,10 @@ class RecordHandler:
         res = ""
         if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
             for source in room_sources:
-                self.add_sound(record_name,
-                               source.ip.split('.')[-1])
-            os.remove(f'{HOME}/vids/sound_{record_name}.aac')
+                self.q.put((self.add_sound, (record_name,
+                                             source.ip.split('.')[-1])))
+            self.q.put(
+                (os.remove, (f'{HOME}/vids/sound_{record_name}.aac',)))
         else:
             res = "vid_"
 
@@ -121,21 +122,20 @@ class RecordHandler:
                 file_name = res + record_name + \
                     source.ip.split('.')[-1] + ".mp4"
 
-                upload(HOME + "/vids/" + file_name,
-                       folder_id)
-                os.remove(HOME + "/vids/" + file_name)
+                self.q.put((upload, (HOME + "/vids/" + file_name,
+                                     folder_id)))
+                self.q.put((os.remove, (HOME + "/vids/" + file_name,)))
 
             except Exception as e:
                 print(e)
 
     def add_sound(self, record_name: str, source_id: str) -> None:
-        with self.lock:
-            proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
-                                     HOME + "/vids/vid_" + record_name + source_id +
-                                     ".mp4", "-y", "-shortest", "-c", "copy",
-                                     HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
-            proc.wait()
-            try:
-                os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
-            except:
-                pass
+        proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
+                                 HOME + "/vids/vid_" + record_name + source_id +
+                                 ".mp4", "-y", "-shortest", "-c", "copy",
+                                 HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
+        proc.wait()
+        try:
+            os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+        except:
+            pass
