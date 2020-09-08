@@ -13,10 +13,12 @@ HOME = str(Path.home())
 
 
 class RecordHandler:
-    lock = RLock()
-    rooms = {}
-    processes = {}
-    record_names = {}
+    def __init__(self):
+        self.prepare_records_and_upload_lock = RLock()
+        self.sync_and_upload_lock = RLock()
+        self.rooms = {}
+        self.processes = {}
+        self.record_names = {}
 
     def config(self, room_id: int, name: str) -> None:
         self.rooms[room_id] = {"name": name}
@@ -78,7 +80,7 @@ class RecordHandler:
             return False
 
     def prepare_records_and_upload(self, room: Room) -> None:
-        with self.lock:
+        with self.prepare_records_and_upload_lock:
             record_name = self.record_names[room.id]
             room_folder_id = room.drive.split('/')[-1]
 
@@ -94,30 +96,31 @@ class RecordHandler:
                 time_folder_url = create_folder(
                     time, date_folder_url.split('/')[-1])
 
-            self.sync_and_upload(record_name, room.sources,
-                                 time_folder_url.split('/')[-1])
+            Thread(target=self.sync_and_upload, args=(
+                record_name, room.sources, time_folder_url.split('/')[-1])).start()
 
     def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
-        res = ""
-        if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
+        with self.sync_and_upload_lock:
+            res = ""
+            if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
+                for source in room_sources:
+                    self.add_sound(record_name,
+                                   source.ip.split('.')[-1])
+                os.remove(f'{HOME}/vids/sound_{record_name}.aac')
+            else:
+                res = "vid_"
+
             for source in room_sources:
-                self.add_sound(record_name,
-                               source.ip.split('.')[-1])
-            os.remove(f'{HOME}/vids/sound_{record_name}.aac')
-        else:
-            res = "vid_"
+                try:
+                    file_name = res + record_name + \
+                        source.ip.split('.')[-1] + ".mp4"
 
-        for source in room_sources:
-            try:
-                file_name = res + record_name + \
-                    source.ip.split('.')[-1] + ".mp4"
+                    upload(HOME + "/vids/" + file_name,
+                           folder_id)
 
-                upload(HOME + "/vids/" + file_name,
-                       folder_id)
-
-                os.remove(HOME + "/vids/" + file_name)
-            except Exception as e:
-                print(e)
+                    os.remove(HOME + "/vids/" + file_name)
+                except Exception as e:
+                    print(e)
 
     def add_sound(self, record_name: str, source_id: str) -> None:
         proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
