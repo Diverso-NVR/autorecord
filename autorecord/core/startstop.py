@@ -3,7 +3,8 @@ import os
 import signal
 import subprocess
 from pathlib import Path
-from threading import RLock, Thread
+import threading
+import queue
 import pytz
 
 from .apis.drive_api import upload, create_folder, get_folder_by_name
@@ -14,12 +15,17 @@ HOME = str(Path.home())
 
 class RecordHandler:
     def __init__(self):
-        self.prepare_records_and_upload_lock = RLock()
-        self.sync_and_upload_lock = RLock()
-        self.add_sound_lock = RLock()
+        self.q = queue.Queue()
         self.rooms = {}
         self.processes = {}
         self.record_names = {}
+        threading.Thread(target=self.worker).start()
+
+    def worker(self):
+        while True:
+            room = self.q.get()
+            self.prepare_records_and_upload(room)
+            self.q.task_done()
 
     def config(self, room_id: int, name: str) -> None:
         self.rooms[room_id] = {"name": name}
@@ -74,7 +80,7 @@ class RecordHandler:
 
             del self.processes[room.id]
 
-            Thread(target=self.prepare_records_and_upload, args=(room,)).start()
+            self.q.put(room)
 
             return True
         except KeyError:
@@ -96,8 +102,8 @@ class RecordHandler:
             time_folder_url = create_folder(
                 time, date_folder_url.split('/')[-1])
 
-        Thread(target=self.sync_and_upload, args=(
-            record_name, room.sources, time_folder_url.split('/')[-1])).start()
+        self.sync_and_upload(
+            record_name, room.sources, time_folder_url.split('/')[-1])
 
     def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
         res = ""
@@ -116,19 +122,18 @@ class RecordHandler:
 
                 upload(HOME + "/vids/" + file_name,
                        folder_id)
-
                 os.remove(HOME + "/vids/" + file_name)
+
             except Exception as e:
                 print(e)
 
     def add_sound(self, record_name: str, source_id: str) -> None:
-        with self.add_sound_lock:
-            proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
-                                     HOME + "/vids/vid_" + record_name + source_id +
-                                     ".mp4", "-y", "-shortest", "-c", "copy",
-                                     HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
-            proc.wait()
-            try:
-                os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
-            except:
-                pass
+        proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
+                                 HOME + "/vids/vid_" + record_name + source_id +
+                                 ".mp4", "-y", "-shortest", "-c", "copy",
+                                 HOME + "/vids/" + record_name + source_id + ".mp4"], shell=False)
+        proc.wait()
+        try:
+            os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+        except:
+            pass
