@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import queue
 import signal
 import subprocess
 from threading import Thread, RLock
@@ -19,11 +20,22 @@ logger = logging.getLogger('autorecord_logger')
 class RecordHandler:
     def __init__(self):
         self.lock = RLock()
+        self.upload_queue = queue.Queue()
         self.rooms = {}
         self.processes = {}
         self.record_names = {}
         self.video_ffmpeg_outputs = {}
         self.audio_ffmpeg_output = None
+
+    def worker(self):
+        while True:
+            file_name, folder_id = self.upload_queue.get()
+            logger.info(
+                f'Uploading video {file_name} to folder with id {folder_id}')
+            upload(file_name, folder_id)
+            logger.info(
+                f'Uploaded video {file_name} to folder with id {folder_id}')
+            self.upload_queue.task_done()
 
     def config(self, room_id: int, room_name: str) -> None:
         logger.info(f'Starting configuring room {room_name} with id {room_id}')
@@ -155,24 +167,14 @@ class RecordHandler:
             try:
                 file_name = res + record_name + \
                     source.ip.split('.')[-1] + ".mp4"
-                logger.info(
-                    f'Uploading video {file_name} to folder with id {folder_id}')
 
-                upload(HOME + "/vids/" + file_name, folder_id)
-                logger.info(
-                    f'Uploaded video {file_name} to folder with id {folder_id}')
+                self.upload_queue.put((HOME + "/vids/" + file_name, folder_id))
+
             except FileNotFoundError:
                 pass
             except:
                 logger.error(
                     f'Failed to upload file {file_name} to folder {folder_id}', exc_info=True)
-
-            try:
-                os.remove(HOME + "/vids/" + file_name)
-            except FileNotFoundError:
-                pass
-            except:
-                logger.warning(f'Failed to remove file {file_name}')
 
     def add_sound(self, record_name: str, source_id: str) -> None:
         logger.info(f'Adding sound to record {record_name}{source_id}')

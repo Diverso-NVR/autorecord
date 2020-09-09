@@ -2,16 +2,14 @@ from __future__ import print_function
 
 import logging
 import os.path
+import os
 import pickle
-from threading import RLock
 
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-lock = RLock()
-upload_lock = RLock()
 
 SCOPES = 'https://www.googleapis.com/auth/drive'
 """
@@ -43,28 +41,27 @@ def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
     """
     Creates folder in format: 'folder_name'
     """
-    with lock:
-        logger.info(
-            f'Creating folder with name {folder_name} inside folder with id {folder_parent_id}')
+    logger.info(
+        f'Creating folder with name {folder_name} inside folder with id {folder_parent_id}')
 
-        folder_metadata = {
-            'name': folder_name,
-            'mimeType': 'application/vnd.google-apps.folder'
-        }
-        if folder_parent_id:
-            folder_metadata['parents'] = [folder_parent_id]
-        folder = drive_service.files().create(body=folder_metadata,
-                                              fields='id').execute()
+    folder_metadata = {
+        'name': folder_name,
+        'mimeType': 'application/vnd.google-apps.folder'
+    }
+    if folder_parent_id:
+        folder_metadata['parents'] = [folder_parent_id]
+    folder = drive_service.files().create(body=folder_metadata,
+                                          fields='id').execute()
 
-        new_perm = {
-            'type': 'anyone',
-            'role': 'reader'
-        }
+    new_perm = {
+        'type': 'anyone',
+        'role': 'reader'
+    }
 
-        drive_service.permissions().create(
-            fileId=folder['id'], body=new_perm).execute()
+    drive_service.permissions().create(
+        fileId=folder['id'], body=new_perm).execute()
 
-        return "https://drive.google.com/drive/u/1/folders/" + folder['id']
+    return "https://drive.google.com/drive/u/1/folders/" + folder['id']
 
 
 def upload(file_name: str, folder_id: str) -> str:
@@ -79,24 +76,26 @@ def upload(file_name: str, folder_id: str) -> str:
     }
     file = drive_service.files().create(
         body=file_data, media_body=media).execute()
+
+    os.remove(file_name)
+
     return file.get('id')
 
 
 def get_folder_by_name(name: str) -> dict:
-    with lock:
-        logger.info(f'Getting the id of folder with name {name}')
+    logger.info(f'Getting the id of folder with name {name}')
 
-        page_token = None
+    page_token = None
 
-        while True:
-            response = drive_service.files().list(q=f"mimeType='application/vnd.google-apps.folder'"
-                                                    f"and name='{name}'",
-                                                    spaces='drive',
-                                                    fields='nextPageToken, files(name, id, parents)',
-                                                    pageToken=page_token).execute()
-            page_token = response.get('nextPageToken', None)
+    while True:
+        response = drive_service.files().list(q=f"mimeType='application/vnd.google-apps.folder'"
+                                                f"and name='{name}'",
+                                                spaces='drive',
+                                                fields='nextPageToken, files(name, id, parents)',
+                                                pageToken=page_token).execute()
+        page_token = response.get('nextPageToken', None)
 
-            if page_token is None:
-                break
+        if page_token is None:
+            break
 
-        return {folder['id']: folder.get('parents', [''])[0] for folder in response['files']}
+    return {folder['id']: folder.get('parents', [''])[0] for folder in response['files']}
