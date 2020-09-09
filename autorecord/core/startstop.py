@@ -27,6 +27,8 @@ class RecordHandler:
         self.video_ffmpeg_outputs = {}
         self.audio_ffmpeg_output = None
 
+        Thread(target=self.worker).start()
+
     def worker(self):
         while True:
             file_name, folder_id = self.upload_queue.get()
