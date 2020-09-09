@@ -71,19 +71,15 @@ def upload(file_name: str, folder_id: str) -> str:
     """
     Upload file "filename" on drive folder 'folder_id'
     """
-    with upload_lock:
-        logger.info(
-            f'Uploading video {file_name} to folder with id {folder_id}')
-
-        media = MediaFileUpload(
-            file_name, mimetype="video/mp4", resumable=True)
-        file_data = {
-            "name": file_name.split('/')[-1],
-            "parents": [folder_id]
-        }
-        file = drive_service.files().create(
-            body=file_data, media_body=media).execute()
-        return file.get('id')
+    media = MediaFileUpload(
+        file_name, mimetype="video/mp4", resumable=True)
+    file_data = {
+        "name": file_name.split('/')[-1],
+        "parents": [folder_id]
+    }
+    file = drive_service.files().create(
+        body=file_data, media_body=media).execute()
+    return file.get('id')
 
 
 def get_folder_by_name(name: str) -> dict:

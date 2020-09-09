@@ -155,8 +155,12 @@ class RecordHandler:
             try:
                 file_name = res + record_name + \
                     source.ip.split('.')[-1] + ".mp4"
+                logger.info(
+                    f'Uploading video {file_name} to folder with id {folder_id}')
 
                 upload(HOME + "/vids/" + file_name, folder_id)
+                logger.info(
+                    f'Uploaded video {file_name} to folder with id {folder_id}')
             except FileNotFoundError:
                 pass
             except:
@@ -171,7 +175,7 @@ class RecordHandler:
                 logger.warning(f'Failed to remove file {file_name}')
 
     def add_sound(self, record_name: str, source_id: str) -> None:
-        logger.info(f'Adding sound to record {record_name}')
+        logger.info(f'Adding sound to record {record_name}{source_id}')
 
         with self.lock:
             add_sound_ffmpeg_output = open(
