@@ -94,6 +94,7 @@ def get_folder_by_name(name: str) -> dict:
                                                 fields='nextPageToken, files(name, id, parents)',
                                                 pageToken=page_token).execute()
         page_token = response.get('nextPageToken', None)
+        print(page_token)
 
         if page_token is None:
             break

@@ -150,7 +150,10 @@ class RecordHandler:
         room_folder_id = room.drive.split('/')[-1]
 
         date, time = record_name.split('_')[0], record_name.split('_')[1]
-        folders = get_folder_by_name(date)
+        try:
+            folders = get_folder_by_name(date)
+        except Exception as err:
+            print(err)
 
         for folder_id, folder_parent_id in folders.items():
             if folder_parent_id == room_folder_id:
