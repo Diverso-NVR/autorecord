@@ -4,7 +4,7 @@ import os
 import queue
 import signal
 import subprocess
-from threading import Thread, RLock
+from threading import Thread
 from datetime import datetime
 from pathlib import Path
 
@@ -19,7 +19,7 @@ logger = logging.getLogger('autorecord_logger')
 
 class RecordHandler:
     def __init__(self):
-        self.lock = RLock()
+        self.main_queue = queue.Queue()
         self.upload_queue = queue.Queue()
         self.rooms = {}
         self.processes = {}
@@ -27,9 +27,16 @@ class RecordHandler:
         self.video_ffmpeg_outputs = {}
         self.audio_ffmpeg_output = None
 
-        Thread(target=self.worker).start()
+        Thread(target=self.main_worker).start()
+        Thread(target=self.upload_worker).start()
 
-    def worker(self):
+    def main_worker(self):
+        while True:
+            room = self.main_queue.get()
+            self.prepare_records_and_upload(room)
+            self.main_queue.task_done()
+
+    def upload_worker(self):
         while True:
             file_name, folder_id = self.upload_queue.get()
             logger.info(
@@ -119,7 +126,7 @@ class RecordHandler:
 
             del self.processes[room.id]
 
-            Thread(target=self.prepare_records_and_upload, args=(room,)).start()
+            self.main_queue.put(room)
 
             logger.info(f'Successfully killed records in room {room.name}')
             return True
@@ -146,8 +153,8 @@ class RecordHandler:
             time_folder_url = create_folder(
                 time, date_folder_url.split('/')[-1])
 
-        Thread(target=self.sync_and_upload, args=(
-            record_name, room.sources, time_folder_url.split('/')[-1])).start()
+        self.sync_and_upload(
+            record_name, room.sources, time_folder_url.split('/')[-1])
 
     def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
         logger.info(
@@ -181,24 +188,23 @@ class RecordHandler:
     def add_sound(self, record_name: str, source_id: str) -> None:
         logger.info(f'Adding sound to record {record_name}{source_id}')
 
-        with self.lock:
-            add_sound_ffmpeg_output = open(
-                f"autorec_sound_add_ffmpeg_log.txt", "a")
+        add_sound_ffmpeg_output = open(
+            f"autorec_sound_add_ffmpeg_log.txt", "a")
 
-            add_sound_ffmpeg_output.write(
-                f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
+        add_sound_ffmpeg_output.write(
+            f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
 
-            proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
-                                     HOME + "/vids/vid_" + record_name + source_id +
-                                     ".mp4", "-y", "-shortest", "-c", "copy",
-                                     HOME + "/vids/" + record_name + source_id + ".mp4"],
-                                    shell=False,
-                                    stdout=add_sound_ffmpeg_output,
-                                    stderr=add_sound_ffmpeg_output)
-            proc.wait()
-            add_sound_ffmpeg_output.close()
-            try:
-                os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
-            except:
-                logger.warning(
-                    f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')
+        proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
+                                 HOME + "/vids/vid_" + record_name + source_id +
+                                 ".mp4", "-y", "-shortest", "-c", "copy",
+                                 HOME + "/vids/" + record_name + source_id + ".mp4"],
+                                shell=False,
+                                stdout=add_sound_ffmpeg_output,
+                                stderr=add_sound_ffmpeg_output)
+        proc.wait()
+        add_sound_ffmpeg_output.close()
+        try:
+            os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+        except:
+            logger.warning(
+                f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')

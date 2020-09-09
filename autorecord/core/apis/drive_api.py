@@ -4,14 +4,12 @@ import logging
 import os.path
 import os
 import pickle
-from threading import Lock
 
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-lock = Lock()
 
 SCOPES = 'https://www.googleapis.com/auth/drive'
 """
@@ -85,20 +83,19 @@ def upload(file_name: str, folder_id: str) -> str:
 
 
 def get_folder_by_name(name: str) -> dict:
-    with lock:
-        logger.info(f'Getting the id of folder with name {name}')
+    logger.info(f'Getting the id of folder with name {name}')
 
-        page_token = None
+    page_token = None
 
-        while True:
-            response = drive_service.files().list(q=f"mimeType='application/vnd.google-apps.folder'"
-                                                    f"and name='{name}'",
-                                                    spaces='drive',
-                                                    fields='nextPageToken, files(name, id, parents)',
-                                                    pageToken=page_token).execute()
-            page_token = response.get('nextPageToken', None)
+    while True:
+        response = drive_service.files().list(q=f"mimeType='application/vnd.google-apps.folder'"
+                                                f"and name='{name}'",
+                                                spaces='drive',
+                                                fields='nextPageToken, files(name, id, parents)',
+                                                pageToken=page_token).execute()
+        page_token = response.get('nextPageToken', None)
 
-            if page_token is None:
-                break
+        if page_token is None:
+            break
 
-        return {folder['id']: folder.get('parents', [''])[0] for folder in response['files']}
+    return {folder['id']: folder.get('parents', [''])[0] for folder in response['files']}
