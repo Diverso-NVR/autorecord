@@ -33,7 +33,10 @@ class RecordHandler:
     def main_worker(self):
         while True:
             room = self.main_queue.get()
-            self.prepare_records_and_upload(room)
+            try:
+                self.prepare_records_and_upload(room)
+            except Exception as err:
+                print(err)
             self.main_queue.task_done()
 
     def upload_worker(self):
@@ -41,7 +44,12 @@ class RecordHandler:
             file_name, folder_id = self.upload_queue.get()
             logger.info(
                 f'Uploading video {file_name} to folder with id {folder_id}')
-            upload(file_name, folder_id)
+
+            try:
+                upload(file_name, folder_id)
+            except Exception as err:
+                print(err)
+
             logger.info(
                 f'Uploaded video {file_name} to folder with id {folder_id}')
             self.upload_queue.task_done()
