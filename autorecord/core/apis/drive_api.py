@@ -11,6 +11,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 lock = RLock()
+upload_lock = RLock()
 
 SCOPES = 'https://www.googleapis.com/auth/drive'
 """
@@ -43,7 +44,8 @@ def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
     Creates folder in format: 'folder_name'
     """
     with lock:
-        logger.info(f'Creating folder with name {folder_name} inside folder with id {folder_parent_id}')
+        logger.info(
+            f'Creating folder with name {folder_name} inside folder with id {folder_parent_id}')
 
         folder_metadata = {
             'name': folder_name,
@@ -69,10 +71,12 @@ def upload(file_name: str, folder_id: str) -> str:
     """
     Upload file "filename" on drive folder 'folder_id'
     """
-    with lock:
-        logger.info(f'Uploading video {file_name} to folder with id {folder_id}')
+    with upload_lock:
+        logger.info(
+            f'Uploading video {file_name} to folder with id {folder_id}')
 
-        media = MediaFileUpload(file_name, mimetype="video/mp4", resumable=True)
+        media = MediaFileUpload(
+            file_name, mimetype="video/mp4", resumable=True)
         file_data = {
             "name": file_name.split('/')[-1],
             "parents": [folder_id]

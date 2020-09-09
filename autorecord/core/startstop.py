@@ -1,10 +1,9 @@
 import datetime
 import logging
 import os
-import queue
 import signal
 import subprocess
-import threading
+from threading import Thread, RLock
 from datetime import datetime
 from pathlib import Path
 
@@ -19,20 +18,12 @@ logger = logging.getLogger('autorecord_logger')
 
 class RecordHandler:
     def __init__(self):
-        self.q = queue.Queue()
-        self.lock = threading.RLock()
+        self.lock = RLock()
         self.rooms = {}
         self.processes = {}
         self.record_names = {}
         self.video_ffmpeg_outputs = {}
         self.audio_ffmpeg_output = None
-        threading.Thread(target=self.worker).start()
-
-    def worker(self):
-        while True:
-            room = self.q.get()
-            self.prepare_records_and_upload(room)
-            self.q.task_done()
 
     def config(self, room_id: int, room_name: str) -> None:
         logger.info(f'Starting configuring room {room_name} with id {room_id}')
@@ -114,7 +105,7 @@ class RecordHandler:
 
             del self.processes[room.id]
 
-            self.q.put(room)
+            Thread(target=self.prepare_records_and_upload, args=(room,)).start()
 
             logger.info(f'Successfully killed records in room {room.name}')
             return True
@@ -141,8 +132,8 @@ class RecordHandler:
             time_folder_url = create_folder(
                 time, date_folder_url.split('/')[-1])
 
-        self.sync_and_upload(
-            record_name, room.sources, time_folder_url.split('/')[-1])
+        Thread(target=self.sync_and_upload, args=(
+            record_name, room.sources, time_folder_url.split('/')[-1])).start()
 
     def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
         logger.info(
