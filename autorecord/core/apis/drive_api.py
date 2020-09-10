@@ -72,13 +72,13 @@ def upload_req(file_path: str, folder_id: str) -> str:
     }
 
     res = requests.post(f'{API_URL}/files?uploadType=resumable',
-                        headers=HEADERS,
+                        headers={**HEADERS,
+                                 **{"X-Upload-Content-Type": "video/mp4"}},
                         json=meta_data)
 
     session_url = res.headers.get('Location')
     res = requests.put(session_url, files={"file": open(file_path, 'rb')},
-                       headers={"Content-Length": str(os.stat(file_path).st_size),
-                                "X-Upload-Content-Type": "video/mp4"})
+                       headers={"Content-Length": str(os.stat(file_path).st_size)})
 
     os.remove(file_path)
 
