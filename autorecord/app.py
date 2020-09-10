@@ -15,14 +15,14 @@ class DaemonApp:
     def __init__(self):
         self.logger.info('Class \"DaemonApp\" instantiated')
 
-        # schedule.every().hour.at(":00").do(self.start_new_recording)
-        # schedule.every().hour.at(":30").do(self.start_new_recording)
+        schedule.every().hour.at(":00").do(self.start_new_recording)
+        schedule.every().hour.at(":30").do(self.start_new_recording)
 
     def start_new_recording(self):
         self.logger.info('Starting recording')
 
         session = Session()
-        self.rooms = session.query(Room).filter(Room.name == '306').all()
+        self.rooms = session.query(Room).all()
         session.close()
 
         for room in self.rooms:
@@ -31,28 +31,9 @@ class DaemonApp:
                     f'Room {room.name} has no sources, skipping room')
                 continue
 
-            if room.name not in ['305', '306', '307']:
-                continue
-
-            try:
-                self.record_handler.start_record(room)
-            except Exception:
-                self.logger.error(
-                    f'Unable to kill/start records in room {room.name}', exc_info=True)
-
-        time.sleep(60)
-
-        for room in self.rooms:
-            if not room.sources:
-                self.logger.info(
-                    f'Room {room.name} has no sources, skipping room')
-                continue
-
-            if room.name not in ['305', '306', '307']:
-                continue
-
             try:
                 self.record_handler.kill_records(room)
+                self.record_handler.start_record(room)
             except Exception:
                 self.logger.error(
                     f'Unable to kill/start records in room {room.name}', exc_info=True)
@@ -86,5 +67,4 @@ if __name__ == "__main__":
     DaemonApp.create_logger()
 
     daemon_app = DaemonApp()
-    daemon_app.start_new_recording()
     daemon_app.run()

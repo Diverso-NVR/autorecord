@@ -79,10 +79,13 @@ def upload_req(file_path: str, folder_id: str) -> str:
     file = open(file_path, 'rb')
 
     session_url = res.headers.get('Location')
-    res = requests.put(session_url, body=file.read(),
+    res = requests.put(session_url, data=file.read(),
                        headers={"Content-Length": str(os.stat(file_path).st_size)})
 
     os.remove(file_path)
+
+    logger.info(
+        f'Uploaded {file_path}')
 
 
 def upload(file_name: str, folder_id: str) -> str:
