@@ -3,7 +3,7 @@ import logging
 import os
 import signal
 import subprocess
-from threading import Thread, Rlock
+from threading import Thread, RLock
 from datetime import datetime
 from pathlib import Path
 
@@ -18,7 +18,7 @@ logger = logging.getLogger('autorecord_logger')
 
 class RecordHandler:
     def __init__(self):
-        self.lock = Rlock()
+        self.lock = RLock()
         self.rooms = {}
         self.processes = {}
         self.record_names = {}
@@ -159,8 +159,7 @@ class RecordHandler:
                 file_name = res + record_name + \
                     source.ip.split('.')[-1] + ".mp4"
 
-                with self.lock:
-                    upload_req(HOME + "/vids/" + file_name, folder_id)
+                upload_req(HOME + "/vids/" + file_name, folder_id)
 
             except FileNotFoundError:
                 pass
