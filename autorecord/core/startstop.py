@@ -1,16 +1,15 @@
 import datetime
 import logging
 import os
-import queue
 import signal
 import subprocess
-from threading import Thread
+from threading import Thread, Rlock
 from datetime import datetime
 from pathlib import Path
 
 import pytz
 
-from .apis.drive_api import upload, create_folder, get_folder_by_name
+from .apis.drive_api import upload_req, upload, create_folder, get_folder_by_name
 from .db.models import Room
 
 HOME = str(Path.home())
@@ -19,40 +18,12 @@ logger = logging.getLogger('autorecord_logger')
 
 class RecordHandler:
     def __init__(self):
-        self.main_queue = queue.Queue()
-        self.upload_queue = queue.Queue()
+        self.lock = Rlock()
         self.rooms = {}
         self.processes = {}
         self.record_names = {}
         self.video_ffmpeg_outputs = {}
         self.audio_ffmpeg_output = None
-
-        Thread(target=self.main_worker).start()
-        Thread(target=self.upload_worker).start()
-
-    def main_worker(self):
-        while True:
-            room = self.main_queue.get()
-            try:
-                self.prepare_records_and_upload(room)
-            except Exception as err:
-                print(err)
-            self.main_queue.task_done()
-
-    def upload_worker(self):
-        while True:
-            file_name, folder_id = self.upload_queue.get()
-            logger.info(
-                f'Uploading video {file_name} to folder with id {folder_id}')
-
-            try:
-                upload(file_name, folder_id)
-            except Exception as err:
-                print(err)
-
-            logger.info(
-                f'Uploaded video {file_name} to folder with id {folder_id}')
-            self.upload_queue.task_done()
 
     def config(self, room_id: int, room_name: str) -> None:
         logger.info(f'Starting configuring room {room_name} with id {room_id}')
@@ -134,7 +105,7 @@ class RecordHandler:
 
             del self.processes[room.id]
 
-            self.main_queue.put(room)
+            Thread(target=self.prepare_records_and_upload, args=(room,)).start()
 
             logger.info(f'Successfully killed records in room {room.name}')
             return True
@@ -188,7 +159,8 @@ class RecordHandler:
                 file_name = res + record_name + \
                     source.ip.split('.')[-1] + ".mp4"
 
-                self.upload_queue.put((HOME + "/vids/" + file_name, folder_id))
+                with self.lock:
+                    upload_req(HOME + "/vids/" + file_name, folder_id)
 
             except FileNotFoundError:
                 pass
@@ -197,25 +169,26 @@ class RecordHandler:
                     f'Failed to upload file {file_name} to folder {folder_id}', exc_info=True)
 
     def add_sound(self, record_name: str, source_id: str) -> None:
-        logger.info(f'Adding sound to record {record_name}{source_id}')
+        with self.lock:
+            logger.info(f'Adding sound to record {record_name}{source_id}')
 
-        add_sound_ffmpeg_output = open(
-            f"autorec_sound_add_ffmpeg_log.txt", "a")
+            add_sound_ffmpeg_output = open(
+                f"autorec_sound_add_ffmpeg_log.txt", "a")
 
-        add_sound_ffmpeg_output.write(
-            f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
+            add_sound_ffmpeg_output.write(
+                f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
 
-        proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
-                                 HOME + "/vids/vid_" + record_name + source_id +
-                                 ".mp4", "-y", "-shortest", "-c", "copy",
-                                 HOME + "/vids/" + record_name + source_id + ".mp4"],
-                                shell=False,
-                                stdout=add_sound_ffmpeg_output,
-                                stderr=add_sound_ffmpeg_output)
-        proc.wait()
-        add_sound_ffmpeg_output.close()
-        try:
-            os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
-        except:
-            logger.warning(
-                f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')
+            proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
+                                     HOME + "/vids/vid_" + record_name + source_id +
+                                     ".mp4", "-y", "-shortest", "-c", "copy",
+                                     HOME + "/vids/" + record_name + source_id + ".mp4"],
+                                    shell=False,
+                                    stdout=add_sound_ffmpeg_output,
+                                    stderr=add_sound_ffmpeg_output)
+            proc.wait()
+            add_sound_ffmpeg_output.close()
+            try:
+                os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+            except:
+                logger.warning(
+                    f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')

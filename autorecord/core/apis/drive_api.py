@@ -4,6 +4,7 @@ import logging
 import os.path
 import os
 import pickle
+import requests
 
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -16,25 +17,83 @@ SCOPES = 'https://www.googleapis.com/auth/drive'
 Setting up drive
 """
 creds = None
-token_path = '/autorecord/creds/tokenDrive.pickle'
-creds_path = '/autorecord/creds/credentials.json'
+TOKEN_PATH = '/autorecord/creds/tokenDrive.pickle'
+CREDS_PATH = '/autorecord/creds/credentials.json'
 
-if os.path.exists(token_path):
-    with open(token_path, 'rb') as token:
-        creds = pickle.load(token)
-if not creds or not creds.valid:
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    else:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            creds_path, SCOPES)
-        creds = flow.run_local_server(port=0)
-    with open(token_path, 'wb') as token:
-        pickle.dump(creds, token)
+
+# TODO: try to do it DRY
+def creds_generate():
+    global creds
+    if os.path.exists(TOKEN_PATH):
+        with open(TOKEN_PATH, 'rb') as token:
+            creds = pickle.load(token)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                CREDS_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+        with open(TOKEN_PATH, 'wb') as token:
+            pickle.dump(creds, token)
+
+
+creds_generate()
+API_URL = 'https://www.googleapis.com/upload/drive/v3'
+HEADERS = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {creds.token}"
+}
+
+
+def token_check(func):
+    def wrapper(*args, **kwargs):
+        creds_generate()
+        HEADERS["Authorization"] = f"Bearer {creds.token}"
+        return func(*args, **kwargs)
+
+    return wrapper
+
 
 drive_service = build('drive', 'v3', credentials=creds)
 
 logger = logging.getLogger('autorecord_logger')
+
+
+@token_check
+def upload_req(file_path: str, folder_id: str) -> str:
+    meta_data = {
+        "name": file_path.split('/')[-1],
+        "parents": [{"id": folder_id}]
+    }
+    files = {
+        "data": ("metadata", json.dumps(meta_data), "application/json; charset=UTF-8"),
+        "file": open(file_path, 'rb')
+    }
+
+    res = requests.post(f'{API_URL}/files?uploadType=resumable',
+                        headers=HEADERS, files=files
+                        verify=False)
+
+    return res.json()
+
+
+def upload(file_name: str, folder_id: str) -> str:
+    """
+    Upload file "filename" on drive folder 'folder_id'
+    """
+    media = MediaFileUpload(
+        file_name, mimetype="video/mp4", resumable=True)
+    file_data = {
+        "name": file_name.split('/')[-1],
+        "parents": [folder_id]
+    }
+    file = drive_service.files().create(
+        body=file_data, media_body=media).execute()
+
+    os.remove(file_name)
+
+    return file.get('id')
 
 
 def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
@@ -62,24 +121,6 @@ def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
         fileId=folder['id'], body=new_perm).execute()
 
     return "https://drive.google.com/drive/u/1/folders/" + folder['id']
-
-
-def upload(file_name: str, folder_id: str) -> str:
-    """
-    Upload file "filename" on drive folder 'folder_id'
-    """
-    media = MediaFileUpload(
-        file_name, mimetype="video/mp4", resumable=True)
-    file_data = {
-        "name": file_name.split('/')[-1],
-        "parents": [folder_id]
-    }
-    file = drive_service.files().create(
-        body=file_data, media_body=media).execute()
-
-    os.remove(file_name)
-
-    return file.get('id')
 
 
 def get_folder_by_name(name: str) -> dict:
