@@ -68,7 +68,7 @@ logger = logging.getLogger('autorecord_logger')
 def upload_req(file_path: str, folder_id: str) -> str:
     meta_data = {
         "name": file_path.split('/')[-1],
-        "parents": [{"id": folder_id}]
+        "parents": [folder_id]
     }
     print(meta_data)
     files = {
@@ -77,12 +77,14 @@ def upload_req(file_path: str, folder_id: str) -> str:
     }
 
     res = requests.post(f'{API_URL}/files?uploadType=resumable',
-                        headers=HEADERS)
+                        headers=HEADERS,
+                        files={"data": ("metadata", json.dumps(meta_data), "application/json; charset=UTF-8")})
     print("POST:", res.text)
 
     session_url = res.headers.get('Location')
-    res = requests.put(session_url, files=files,
-                       headers={"Content-Length": os.stat(file_path).st_size})
+    res = requests.put(session_url, files={"file": open(file_path, 'rb')},
+                       headers={"Content-Length": str(os.stat(file_path).st_size),
+                                "X-Upload-Content-Type": "video/mp4"})
     print("PUT:", res.text)
 
 
