@@ -76,8 +76,10 @@ def upload_req(file_path: str, folder_id: str) -> str:
                                  **{"X-Upload-Content-Type": "video/mp4"}},
                         json=meta_data)
 
+    file = open(file_path, 'rb')
+
     session_url = res.headers.get('Location')
-    res = requests.put(session_url, files={"file": open(file_path, 'rb')},
+    res = requests.put(session_url, body=file.read(),
                        headers={"Content-Length": str(os.stat(file_path).st_size)})
 
     os.remove(file_path)
