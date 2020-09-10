@@ -70,16 +70,20 @@ def upload_req(file_path: str, folder_id: str) -> str:
         "name": file_path.split('/')[-1],
         "parents": [{"id": folder_id}]
     }
+    print(meta_data)
     files = {
         "data": ("metadata", json.dumps(meta_data), "application/json; charset=UTF-8"),
         "file": open(file_path, 'rb')
     }
 
     res = requests.post(f'{API_URL}/files?uploadType=resumable',
-                        headers=HEADERS, files=files,
-                        verify=False)
+                        headers=HEADERS)
+    print("POST:", res.text)
 
-    return res.json()
+    session_url = requests.headers.get('Location')
+    res = requests.put(session_url, files=files,
+                       headers={"Content-Length": os.stat(file_path).st_size})
+    print("PUT:", res.text)
 
 
 def upload(file_name: str, folder_id: str) -> str:
