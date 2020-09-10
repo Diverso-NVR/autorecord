@@ -51,10 +51,9 @@ HEADERS = {
 
 def token_check(func):
     def wrapper(*args, **kwargs):
-        with lock:
-            creds_generate()
-            HEADERS["Authorization"] = f"Bearer {creds.token}"
-            return func(*args, **kwargs)
+        creds_generate()
+        HEADERS["Authorization"] = f"Bearer {creds.token}"
+        return func(*args, **kwargs)
 
     return wrapper
 
@@ -70,22 +69,17 @@ def upload_req(file_path: str, folder_id: str) -> str:
         "name": file_path.split('/')[-1],
         "parents": [folder_id]
     }
-    print(meta_data)
-    files = {
-        "data": ("metadata", json.dumps(meta_data), "application/json; charset=UTF-8"),
-        "file": open(file_path, 'rb')
-    }
 
     res = requests.post(f'{API_URL}/files?uploadType=resumable',
                         headers=HEADERS,
                         json=meta_data)
-    print("POST:", res.text)
 
     session_url = res.headers.get('Location')
     res = requests.put(session_url, files={"file": open(file_path, 'rb')},
                        headers={"Content-Length": str(os.stat(file_path).st_size),
                                 "X-Upload-Content-Type": "video/mp4"})
-    print("PUT:", res.text)
+
+    os.remove(file_path)
 
 
 def upload(file_name: str, folder_id: str) -> str:
