@@ -68,7 +68,7 @@ logger = logging.getLogger('autorecord_logger')
 def upload_req(file_path: str, folder_id: str) -> str:
     meta_data = {
         "name": file_path.split('/')[-1],
-        "parents": [folder_id]
+        "parents": [{'id': folder_id}]
     }
     print(meta_data)
     files = {
