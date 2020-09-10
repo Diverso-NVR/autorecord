@@ -22,7 +22,7 @@ class DaemonApp:
         self.logger.info('Starting recording')
 
         session = Session()
-        self.rooms = session.query(Room).filter(Room.name == '305').all()
+        self.rooms = session.query(Room).all()
         session.close()
 
         for room in self.rooms:
@@ -31,9 +31,27 @@ class DaemonApp:
                     f'Room {room.name} has no sources, skipping room')
                 continue
 
+            if room.name not in ['305', '306', '307']:
+                continue
+
             try:
                 self.record_handler.start_record(room)
-                time.sleep(60)
+            except Exception:
+                self.logger.error(
+                    f'Unable to kill/start records in room {room.name}', exc_info=True)
+
+        time.sleep(60)
+
+        for room in self.rooms:
+            if not room.sources:
+                self.logger.info(
+                    f'Room {room.name} has no sources, skipping room')
+                continue
+
+            if room.name not in ['305', '306', '307']:
+                continue
+
+            try:
                 self.record_handler.kill_records(room)
             except Exception:
                 self.logger.error(
