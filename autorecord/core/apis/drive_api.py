@@ -80,7 +80,7 @@ def upload_req(file_path: str, folder_id: str) -> str:
                         headers=HEADERS)
     print("POST:", res.text)
 
-    session_url = requests.headers.get('Location')
+    session_url = res.headers.get('Location')
     res = requests.put(session_url, files=files,
                        headers={"Content-Length": os.stat(file_path).st_size})
     print("PUT:", res.text)
