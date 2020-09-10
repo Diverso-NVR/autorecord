@@ -158,14 +158,16 @@ class RecordHandler:
             try:
                 file_name = res + record_name + \
                     source.ip.split('.')[-1] + ".mp4"
-
+                logger.info(
+                    f'Uploading {HOME + "/vids/" + file_name}')
                 upload_req(HOME + "/vids/" + file_name, folder_id)
 
             except FileNotFoundError:
-                pass
+                logger.warning(
+                    f'File {HOME + "/vids/" + file_name} doesn`t exist')
             except:
                 logger.error(
-                    f'Failed to upload file {file_name} to folder {folder_id}', exc_info=True)
+                    f'Failed to upload file {file_name}', exc_info=True)
 
     def add_sound(self, record_name: str, source_id: str) -> None:
         with self.lock:
