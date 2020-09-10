@@ -4,7 +4,6 @@ import os
 import signal
 import subprocess
 from threading import Thread, RLock
-from queue import Queue
 from datetime import datetime
 from pathlib import Path
 
@@ -20,22 +19,11 @@ logger = logging.getLogger('autorecord_logger')
 class RecordHandler:
     def __init__(self):
         self.lock = RLock()
-        self.upload_queue = Queue()
         self.rooms = {}
         self.processes = {}
         self.record_names = {}
         self.video_ffmpeg_outputs = {}
         self.audio_ffmpeg_output = None
-
-        Thread(target=self.upload_worker).start()
-
-    def upload_worker(self):
-        while True:
-            file_path, folder_id = self.upload_queue.get()
-            logger.info(f'Uploading {file_path}')
-            upload_req(file_path, folder_id)
-            logger.info(f'Uploaded {file_path}')
-            self.upload_queue.task_done()
 
     def config(self, room_id: int, room_name: str) -> None:
         logger.info(f'Starting configuring room {room_name} with id {room_id}')
@@ -171,7 +159,7 @@ class RecordHandler:
                 file_name = res + record_name + \
                     source.ip.split('.')[-1] + ".mp4"
 
-                self.upload_queue.put((HOME + "/vids/" + file_name, folder_id))
+                upload_req(HOME + "/vids/" + file_name, folder_id)
 
             except FileNotFoundError:
                 pass

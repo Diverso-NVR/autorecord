@@ -51,9 +51,10 @@ HEADERS = {
 
 def token_check(func):
     def wrapper(*args, **kwargs):
-        creds_generate()
-        HEADERS["Authorization"] = f"Bearer {creds.token}"
-        return func(*args, **kwargs)
+        with lock:
+            creds_generate()
+            HEADERS["Authorization"] = f"Bearer {creds.token}"
+            return func(*args, **kwargs)
 
     return wrapper
 

@@ -22,7 +22,7 @@ class DaemonApp:
         self.logger.info('Starting recording')
 
         session = Session()
-        self.rooms = session.query(Room).all()
+        self.rooms = session.query(Room).filter(Room.name == '306').all()
         session.close()
 
         for room in self.rooms:
