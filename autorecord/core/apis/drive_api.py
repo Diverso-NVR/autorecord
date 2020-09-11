@@ -90,8 +90,9 @@ async def upload(file_path: str, folder_id: str) -> str:
         async with AIOFile(file_path, 'rb') as afp:
             file_data = await afp.read()
 
-        await session.put(session_url, data=file_data, ssl=False,
-                          headers={"Content-Length": str(os.stat(file_path).st_size)})
+        async with session.put(session_url, data=file_data, ssl=False,
+                               headers={"Content-Length": str(os.stat(file_path).st_size)}) as resp:
+            pass
 
     os.remove(file_path)
 
@@ -130,10 +131,11 @@ async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
             'role': 'reader'
         }
 
-        await session.post(f'{API_URL}/files/{folder_id}/permissions',
-                           headers=HEADERS,
-                           json=new_perm,
-                           ssl=False)
+        async with session.post(f'{API_URL}/files/{folder_id}/permissions',
+                                headers=HEADERS,
+                                json=new_perm,
+                                ssl=False) as resp:
+            pass
 
     return f"https://drive.google.com/drive/u/1/folders/{folder_id}"
 
