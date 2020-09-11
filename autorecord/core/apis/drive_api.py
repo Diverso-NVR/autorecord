@@ -23,8 +23,8 @@ SCOPES = 'https://www.googleapis.com/auth/drive'
 Setting up drive
 """
 creds = None
-TOKEN_PATH = 'core/creds/tokenDrive.pickle'
-CREDS_PATH = 'core/creds/credentials.json'
+TOKEN_PATH = '/autorecord/creds/tokenDrive.pickle'
+CREDS_PATH = '/autorecord/creds/credentials.json'
 
 
 # TODO: try to do it DRY
@@ -97,7 +97,7 @@ async def upload_req(file_path: str, folder_id: str) -> str:
         async with AIOFile(file_path, 'rb') as afp:
             file_data = await afp.read()
 
-        await session.put(session_url, data=file_data, verify_ssl=False
+        await session.put(session_url, data=file_data, verify_ssl=False,
                           headers={"Content-Length": str(os.stat(file_path).st_size)})
 
     os.remove(file_path)
@@ -158,7 +158,7 @@ async def get_folder_by_name(name: str) -> dict:
     async with ClientSession() as session:
         while page_token != False:
             async with session.get(f'{API_URL}/files?pageToken={page_token}',
-                                   headers=HEADERS, params=params
+                                   headers=HEADERS, params=params,
                                    verify_ssl=False) as resp:
                 resp_json = await resp.json()
                 folders.extend(resp_json.get('files', []))
