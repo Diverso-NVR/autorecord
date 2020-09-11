@@ -24,8 +24,8 @@ SCOPES = 'https://www.googleapis.com/auth/drive'
 Setting up drive
 """
 creds = None
-TOKEN_PATH = 'core/creds/tokenDrive.pickle'
-CREDS_PATH = 'core/creds/credentials.json'
+TOKEN_PATH = '/autorecord/creds/tokenDrive.pickle'
+CREDS_PATH = '/autorecord/creds/credentials.json'
 
 
 # TODO: try to do it DRY
