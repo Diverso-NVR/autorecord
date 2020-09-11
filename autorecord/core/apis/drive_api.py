@@ -71,16 +71,8 @@ def token_check(func):
     return wrapper
 
 
-async def foo():
-    async with ClientSession() as session:
-        async with session.get(f'https://google.com', verify_ssl=False) as resp:
-            print(resp.headers.get('Location'))
-
-asyncio.run(foo())
-
-
 @token_check
-async def upload_req(file_path: str, folder_id: str) -> str:
+async def upload(file_path: str, folder_id: str) -> str:
     meta_data = {
         "name": file_path.split('/')[-1],
         "parents": [folder_id]

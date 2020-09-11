@@ -10,7 +10,7 @@ from pathlib import Path
 import asyncio
 import pytz
 
-from .apis.drive_api import upload_req, upload, create_folder, get_folder_by_name
+from .apis.drive_api import upload, create_folder, get_folder_by_name
 from .db.models import Room
 
 HOME = str(Path.home())
@@ -174,7 +174,7 @@ class RecordHandler:
                 logger.info(
                     f'Uploading {HOME + "/vids/" + file_name}')
 
-                await upload_req(HOME + "/vids/" + file_name, folder_id)
+                await upload(HOME + "/vids/" + file_name, folder_id)
 
             except FileNotFoundError:
                 logger.warning(
