@@ -104,6 +104,8 @@ class RecordHandler:
 
     def kill_room_records(self, room: Room) -> bool:
         logger.info(f'Starting killing records in room {room.name}')
+        if not self.processes.get(room.id):
+            return
 
         try:
             for process in self.processes[room.id]:
@@ -128,6 +130,9 @@ class RecordHandler:
 
     async def prepare_records_and_upload(self, room: Room) -> None:
         logger.info(f'Preparing and uploading records from room {room.name}')
+
+        if not self.record_names.get(room.id):
+            return
 
         record_name = self.record_names[room.id]
         room_folder_id = room.drive.split('/')[-1]
