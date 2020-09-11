@@ -7,6 +7,7 @@ from threading import Thread, RLock
 from datetime import datetime
 from pathlib import Path
 
+import asyncio
 import pytz
 
 from .apis.drive_api import upload_req, upload, create_folder, get_folder_by_name
@@ -18,7 +19,6 @@ logger = logging.getLogger('autorecord_logger')
 
 class RecordHandler:
     def __init__(self):
-        self.lock = RLock()
         self.rooms = {}
         self.processes = {}
         self.record_names = {}
@@ -88,7 +88,19 @@ class RecordHandler:
                                        stderr=self.video_ffmpeg_outputs[source.ip])
             self.processes[room_id].append(process)
 
-    def kill_records(self, room: Room) -> bool:
+    def stop_records(self, rooms):
+        coros = []
+        for room in rooms:
+            self.kill_room_records(room)
+            task = asyncio.create_task(self.prepare_records_and_upload(room))
+            coros.append(task)
+
+        Thread(target=asyncio.run, args=(self.start_tasks(coros),)).start()
+
+    async def start_tasks(self, tasks):
+        await asyncio.gather(*tasks)
+
+    def kill_room_records(self, room: Room) -> bool:
         logger.info(f'Starting killing records in room {room.name}')
 
         try:
@@ -105,8 +117,6 @@ class RecordHandler:
 
             del self.processes[room.id]
 
-            Thread(target=self.prepare_records_and_upload, args=(room,)).start()
-
             logger.info(f'Successfully killed records in room {room.name}')
             return True
         except Exception:
@@ -114,7 +124,7 @@ class RecordHandler:
                 f'Failed to kill records in room {room.name}', exc_info=True)
             return False
 
-    def prepare_records_and_upload(self, room: Room) -> None:
+    async def prepare_records_and_upload(self, room: Room) -> None:
         logger.info(f'Preparing and uploading records from room {room.name}')
 
         record_name = self.record_names[room.id]
@@ -122,35 +132,38 @@ class RecordHandler:
 
         date, time = record_name.split('_')[0], record_name.split('_')[1]
         try:
-            folders = get_folder_by_name(date)
+            folders = await get_folder_by_name(date)
         except Exception as err:
             print(err)
 
         for folder_id, folder_parent_id in folders.items():
             if folder_parent_id == room_folder_id:
-                time_folder_url = create_folder(time, folder_id)
+                time_folder_url = await create_folder(time, folder_id)
                 break
         else:
-            date_folder_url = create_folder(date, room_folder_id)
-            time_folder_url = create_folder(
+            date_folder_url = await create_folder(date, room_folder_id)
+            time_folder_url = await create_folder(
                 time, date_folder_url.split('/')[-1])
 
-        self.sync_and_upload(
+        await self.sync_and_upload(
             record_name, room.sources, time_folder_url.split('/')[-1])
 
-    def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
+    async def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
         logger.info(
             f'Syncing video and audio and uploading record {record_name} to folder {folder_id}')
 
         res = ""
         if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
-            for source in room_sources:
-                self.add_sound(record_name, source.ip.split('.')[-1])
-            try:
-                os.remove(f'{HOME}/vids/sound_{record_name}.aac')
-            except:
-                logger.warning(
-                    f'Failed to remove file {HOME}/vids/sound_{record_name}.aac')
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                for source in room_sources:
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(
+                        pool, self.add_sound, record_name, source.ip.split('.')[-1])
+                try:
+                    os.remove(f'{HOME}/vids/sound_{record_name}.aac')
+                except:
+                    logger.warning(
+                        f'Failed to remove file {HOME}/vids/sound_{record_name}.aac')
         else:
             res = "vid_"
 
@@ -160,7 +173,8 @@ class RecordHandler:
                     source.ip.split('.')[-1] + ".mp4"
                 logger.info(
                     f'Uploading {HOME + "/vids/" + file_name}')
-                upload_req(HOME + "/vids/" + file_name, folder_id)
+
+                await upload_req(HOME + "/vids/" + file_name, folder_id)
 
             except FileNotFoundError:
                 logger.warning(
@@ -170,26 +184,25 @@ class RecordHandler:
                     f'Failed to upload file {file_name}', exc_info=True)
 
     def add_sound(self, record_name: str, source_id: str) -> None:
-        with self.lock:
-            logger.info(f'Adding sound to record {record_name}{source_id}')
+        logger.info(f'Adding sound to record {record_name}{source_id}')
 
-            add_sound_ffmpeg_output = open(
-                f"autorec_sound_add_ffmpeg_log.txt", "a")
+        add_sound_ffmpeg_output = open(
+            f"autorec_sound_add_ffmpeg_log.txt", "a")
 
-            add_sound_ffmpeg_output.write(
-                f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
+        add_sound_ffmpeg_output.write(
+            f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
 
-            proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
-                                     HOME + "/vids/vid_" + record_name + source_id +
-                                     ".mp4", "-y", "-shortest", "-c", "copy",
-                                     HOME + "/vids/" + record_name + source_id + ".mp4"],
-                                    shell=False,
-                                    stdout=add_sound_ffmpeg_output,
-                                    stderr=add_sound_ffmpeg_output)
-            proc.wait()
-            add_sound_ffmpeg_output.close()
-            try:
-                os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
-            except:
-                logger.warning(
-                    f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')
+        proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
+                                 HOME + "/vids/vid_" + record_name + source_id +
+                                 ".mp4", "-y", "-shortest", "-c", "copy",
+                                 HOME + "/vids/" + record_name + source_id + ".mp4"],
+                                shell=False,
+                                stdout=add_sound_ffmpeg_output,
+                                stderr=add_sound_ffmpeg_output)
+        proc.wait()
+        add_sound_ffmpeg_output.close()
+        try:
+            os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+        except:
+            logger.warning(
+                f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')
