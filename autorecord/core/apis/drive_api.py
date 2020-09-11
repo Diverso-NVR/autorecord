@@ -123,15 +123,15 @@ async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
             resp_json = await resp.json()
             folder_id = resp_json['id']
 
-    new_perm = {
-        'type': 'anyone',
-        'role': 'reader'
-    }
+        new_perm = {
+            'type': 'anyone',
+            'role': 'reader'
+        }
 
-    await session.post(f'{API_URL}/files/{folder_id}/permissions',
-                       headers=HEADERS,
-                       json=new_perm,
-                       verify_ssl=False)
+        await session.post(f'{API_URL}/files/{folder_id}/permissions',
+                           headers=HEADERS,
+                           json=new_perm,
+                           verify_ssl=False)
 
     return f"https://drive.google.com/drive/u/1/folders/{folder_id}"
 
