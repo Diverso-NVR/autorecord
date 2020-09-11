@@ -95,7 +95,7 @@ class RecordHandler:
         Thread(target=asyncio.run, args=(self.start_tasks(rooms),)).start()
 
     async def start_tasks(self, rooms):
-        await asyncio.gather(*[prepare_records_and_upload(room) for room in rooms])
+        await asyncio.gather(*[self.prepare_records_and_upload(room) for room in rooms])
 
     def kill_room_records(self, room: Room) -> bool:
         logger.info(f'Starting killing records in room {room.name}')
