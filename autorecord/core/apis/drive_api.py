@@ -137,8 +137,6 @@ async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
 
     return f"https://drive.google.com/drive/u/1/folders/{folder_id}"
 
-asyncio.run(create_folder('test', '1zAPs-2GP_SQj6tHLWwgohjuwCS_7o3yu'))
-
 
 @token_check
 async def get_folder_by_name(name: str) -> dict:
