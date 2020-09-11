@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 
 import asyncio
+import concurrent.futures
+
 import pytz
 
 from .apis.drive_api import upload, create_folder, get_folder_by_name
@@ -89,6 +91,9 @@ class RecordHandler:
             self.processes[room_id].append(process)
 
     def stop_records(self, rooms):
+        if not self.processes:
+            return
+
         for room in rooms:
             self.kill_room_records(room)
 
@@ -128,10 +133,7 @@ class RecordHandler:
         room_folder_id = room.drive.split('/')[-1]
 
         date, time = record_name.split('_')[0], record_name.split('_')[1]
-        try:
-            folders = await get_folder_by_name(date)
-        except Exception as err:
-            print(err)
+        folders = await get_folder_by_name(date)
 
         for folder_id, folder_parent_id in folders.items():
             if folder_parent_id == room_folder_id:

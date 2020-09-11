@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import asyncio
 from aiohttp import ClientSession
 from aiofile import AIOFile
+import concurrent.futures
 
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -57,7 +58,7 @@ logger = logging.getLogger('autorecord_logger')
 
 def token_check(func):
     async def wrapper(*args, **kwargs):
-        if creds.expiry + timedelta(hours=3) >= datetime.now():
+        if creds.expiry >= datetime.now():
             logger.info("Recreating google creds")
 
             loop = asyncio.get_running_loop()
