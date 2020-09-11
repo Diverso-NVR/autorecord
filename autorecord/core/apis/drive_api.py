@@ -58,7 +58,7 @@ logger = logging.getLogger('autorecord_logger')
 
 def token_check(func):
     async def wrapper(*args, **kwargs):
-        if creds.expiry >= datetime.now():
+        if creds.expiry + timedelta(hours=3) <= datetime.now():
             logger.info("Recreating google creds")
 
             loop = asyncio.get_running_loop()
