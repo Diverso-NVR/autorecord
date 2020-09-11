@@ -24,8 +24,8 @@ SCOPES = 'https://www.googleapis.com/auth/drive'
 Setting up drive
 """
 creds = None
-TOKEN_PATH = '/autorecord/creds/tokenDrive.pickle'
-CREDS_PATH = '/autorecord/creds/credentials.json'
+TOKEN_PATH = 'core/creds/tokenDrive.pickle'
+CREDS_PATH = 'core/creds/credentials.json'
 
 
 # TODO: try to do it DRY
@@ -84,13 +84,13 @@ async def upload(file_path: str, folder_id: str) -> str:
                                 headers={**HEADERS,
                                          **{"X-Upload-Content-Type": "video/mp4"}},
                                 json=meta_data,
-                                verify_ssl=False) as resp:
+                                ssl=False) as resp:
             session_url = resp.headers.get('Location')
 
         async with AIOFile(file_path, 'rb') as afp:
             file_data = await afp.read()
 
-        await session.put(session_url, data=file_data, verify_ssl=False,
+        await session.put(session_url, data=file_data, ssl=False,
                           headers={"Content-Length": str(os.stat(file_path).st_size)})
 
     os.remove(file_path)
@@ -118,9 +118,11 @@ async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
         async with session.post(f'{API_URL}/files',
                                 headers=HEADERS,
                                 json=meta_data,
-                                verify_ssl=False) as resp:
+                                ssl=False) as resp:
 
             resp_json = await resp.json()
+            logger.info(
+                f'POST create_folder response: {resp_json}')
             folder_id = resp_json['id']
 
         new_perm = {
@@ -131,9 +133,11 @@ async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
         await session.post(f'{API_URL}/files/{folder_id}/permissions',
                            headers=HEADERS,
                            json=new_perm,
-                           verify_ssl=False)
+                           ssl=False)
 
     return f"https://drive.google.com/drive/u/1/folders/{folder_id}"
+
+asyncio.run(create_folder('test', '1zAPs-2GP_SQj6tHLWwgohjuwCS_7o3yu'))
 
 
 @token_check
@@ -152,7 +156,7 @@ async def get_folder_by_name(name: str) -> dict:
         while page_token != False:
             async with session.get(f'{API_URL}/files?pageToken={page_token}',
                                    headers=HEADERS, params=params,
-                                   verify_ssl=False) as resp:
+                                   ssl=False) as resp:
                 resp_json = await resp.json()
                 folders.extend(resp_json.get('files', []))
                 page_token = resp_json.get('nextPageToken', False)
