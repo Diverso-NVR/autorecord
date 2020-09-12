@@ -111,7 +111,7 @@ async def upload(file_path: str, folder_id: str) -> str:
                         break
 
                     _, bytes_data = chunk_range.split('=')
-                    received_bytes_lower, _ = bytes_data.split('-')
+                    _, received_bytes_lower = bytes_data.split('-')
                     received_bytes_lower = int(received_bytes_lower) + 1
 
     os.remove(file_path)
