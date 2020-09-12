@@ -67,5 +67,4 @@ if __name__ == "__main__":
     DaemonApp.create_logger()
 
     daemon_app = DaemonApp()
-    daemon_app.start_new_recording()
     daemon_app.run()
