@@ -96,9 +96,8 @@ async def upload(file_path: str, folder_id: str) -> str:
                 logger.info(f'{chunk_size = }')
                 async with session.put(session_url, data=chunk, ssl=False,
                                        headers={"Content-Length": str(chunk_size),
-                                                "Content-Range": f"bytes {chunk_range}-{chunk_range + chunk_size}/{file_size}"}) as resp:
-                    chunk_range = resp.headers.get(
-                        'Range', chunk_range + chunk_size) + 1
+                                                "Content-Range": f"bytes {chunk_range}-{chunk_range + chunk_size - 1}/{file_size}"}) as resp:
+                    chunk_range = resp.headers.get('Range')
                     logger.info(f'{resp.status = }')
                     logger.info(f'{await resp.text() = }')
                     logger.info(f'{chunk_range = }')
