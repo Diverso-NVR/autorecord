@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 import asyncio
 from aiohttp import ClientSession
-from aiofile import AIOFile
+from aiofile import AIOFile, Reader
 import concurrent.futures
 
 from google.auth.transport.requests import Request
@@ -58,7 +58,7 @@ logger = logging.getLogger('autorecord_logger')
 
 def token_check(func):
     async def wrapper(*args, **kwargs):
-        if creds.expiry + timedelta(hours=3) <= datetime.now():
+        if creds.expiry + timedelta(hours=3) <= datetime.now():  # refresh token
             logger.info("Recreating google creds")
 
             loop = asyncio.get_running_loop()
@@ -88,11 +88,15 @@ async def upload(file_path: str, folder_id: str) -> str:
             session_url = resp.headers.get('Location')
 
         async with AIOFile(file_path, 'rb') as afp:
-            file_data = await afp.read()
-
-        async with session.put(session_url, data=file_data, ssl=False,
-                               headers={"Content-Length": str(os.stat(file_path).st_size)}) as resp:
-            pass
+            file_size = str(os.stat(file_path).st_size)
+            reader = Reader(afp, chunk_size=256 * 1024 * 20)  # 5MB
+            chunk_range = 0
+            async for chunk in reader:
+                chunk_size = len(chunk)
+                async with session.put(session_url, data=chunk, ssl=False,
+                                       headers={"Content-Length": str(chunk_size),
+                                                "Content-Range": f"bytes {chunk_range}-{chunk_range + chunk_size}/{file_size}"}) as resp:
+                    chunk_range = resp.headers.get('Range')
 
     os.remove(file_path)
 
@@ -122,8 +126,6 @@ async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
                                 ssl=False) as resp:
 
             resp_json = await resp.json()
-            logger.info(
-                f'POST create_folder response: {resp_json}')
             folder_id = resp_json['id']
 
         new_perm = {
