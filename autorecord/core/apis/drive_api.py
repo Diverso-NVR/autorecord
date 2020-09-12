@@ -99,11 +99,13 @@ async def upload(file_path: str, folder_id: str) -> str:
                                                 "Content-Range": f"{chunk_range}/{file_size}"}) as resp:
                     # Gives bytes=.../...
                     chunk_range = resp.headers.get('Range')
-                    # But we need without '='
-                    chunk_range = ' '.join(chunk_range.split('='))
                     logger.info(f'{resp.status = }')
                     logger.info(f'{await resp.text() = }')
                     logger.info(f'{chunk_range = }')
+                    if chunk_range is None:
+                        break
+                    # But we need without '='
+                    chunk_range = ' '.join(chunk_range.split('='))
 
     os.remove(file_path)
 
