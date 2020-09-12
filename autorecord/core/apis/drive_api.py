@@ -91,26 +91,28 @@ async def upload(file_path: str, folder_id: str) -> str:
             file_size = str(os.stat(file_path).st_size)
             reader = Reader(afp, chunk_size=256 * 1024 * 20)  # 5MB
             chunk_range = None
+            received_bytes_lower = 0
             async for chunk in reader:
                 chunk_size = len(chunk)
                 logger.info(f'{chunk_size = }')
 
-                if not chunk_range:
-                    chunk_range = f"bytes 0-{chunk_size - 1}"
+                chunk_range = f"bytes {received_bytes_lower}-{received_bytes_lower + chunk_size - 1}"
+                logger.info(f'{chunk_range = }')
 
                 async with session.put(session_url, data=chunk, ssl=False,
                                        headers={"Content-Length": str(chunk_size),
                                                 "Content-Range": f"{chunk_range}/{file_size}"}) as resp:
-                    # Gives bytes=.../...
                     chunk_range = resp.headers.get('Range')
                     logger.info(f'{resp.status = }')
                     logger.info(f'{await resp.text() = }')
                     if chunk_range is None:
                         logger.info(f'{chunk_range = }')
+                        logger.info('No more to upload')
                         break
-                    # But google needs without '=', so:
-                    chunk_range = ' '.join(chunk_range.split('='))
-                    logger.info(f'{chunk_range = }')
+
+                    _, bytes_data = chunk_range.split('=')
+                    received_bytes_lower, _ = bytes_data.split('-')
+                    received_bytes_lower += 1
 
     os.remove(file_path)
 
