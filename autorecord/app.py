@@ -38,9 +38,6 @@ class DaemonApp:
                 self.logger.error(
                     f'Unable to kill/start records in room {room.name}', exc_info=True)
 
-        time.sleep(180)
-        self.record_handler.stop_records(self.rooms)
-
     def run(self):
         while True:
             schedule.run_pending()
@@ -70,5 +67,4 @@ if __name__ == "__main__":
     DaemonApp.create_logger()
 
     daemon_app = DaemonApp()
-    daemon_app.start_new_recording()
     daemon_app.run()
