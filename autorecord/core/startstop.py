@@ -158,34 +158,24 @@ class RecordHandler:
 
         res = ""
         if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                for source in room_sources:
-                    loop = asyncio.get_running_loop()
-                    await loop.run_in_executor(
-                        pool, self.add_sound, record_name, source.ip.split('.')[-1])
-                try:
-                    os.remove(f'{HOME}/vids/sound_{record_name}.aac')
-                except:
-                    logger.warning(
-                        f'Failed to remove file {HOME}/vids/sound_{record_name}.aac')
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(room_sources)) as pool:
+                await asyncio.gather(*[async_add_sound(pool, source, record_name)
+                                       for source in room_sources])
         else:
             res = "vid_"
 
-        for source in room_sources:
-            try:
-                file_name = res + record_name + \
-                    source.ip.split('.')[-1] + ".mp4"
-                logger.info(
-                    f'Uploading {HOME + "/vids/" + file_name}')
+        await asyncio.gather(*[self.uploader(res, record_name, source, folder_id)
+                               for source in room_sources])
 
-                await upload(HOME + "/vids/" + file_name, folder_id)
-
-            except FileNotFoundError:
-                logger.warning(
-                    f'File {HOME + "/vids/" + file_name} doesn`t exist')
-            except:
-                logger.error(
-                    f'Failed to upload file {file_name}', exc_info=True)
+    async def async_add_sound(self, pool, source, record_name):
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            pool, self.add_sound, record_name, source.ip.split('.')[-1])
+        try:
+            os.remove(f'{HOME}/vids/sound_{record_name}.aac')
+        except:
+            logger.warning(
+                f'Failed to remove file {HOME}/vids/sound_{record_name}.aac')
 
     def add_sound(self, record_name: str, source_id: str) -> None:
         logger.info(f'Adding sound to record {record_name}{source_id}')
@@ -210,3 +200,19 @@ class RecordHandler:
         except:
             logger.warning(
                 f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')
+
+    async def uploader(self, res, record_name, source, folder_id):
+        try:
+            file_name = res + record_name + \
+                source.ip.split('.')[-1] + ".mp4"
+            logger.info(
+                f'Uploading {HOME + "/vids/" + file_name}')
+
+            await upload(HOME + "/vids/" + file_name, folder_id)
+
+        except FileNotFoundError:
+            logger.warning(
+                f'File {HOME + "/vids/" + file_name} doesn`t exist')
+        except:
+            logger.error(
+                f'Failed to upload file {file_name}', exc_info=True)
