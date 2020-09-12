@@ -159,7 +159,7 @@ class RecordHandler:
         res = ""
         if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(room_sources)) as pool:
-                await asyncio.gather(*[async_add_sound(pool, source, record_name)
+                await asyncio.gather(*[self.async_add_sound(pool, source, record_name)
                                        for source in room_sources])
         else:
             res = "vid_"
