@@ -96,7 +96,7 @@ async def upload(file_path: str, folder_id: str) -> str:
                 logger.info(f'{chunk_size = }')
 
                 if not chunk_range:
-                    chunk_range = f"bytes 0-{chunk_size}"
+                    chunk_range = f"bytes 0-{chunk_size - 1}"
 
                 async with session.put(session_url, data=chunk, ssl=False,
                                        headers={"Content-Length": str(chunk_size),
@@ -108,7 +108,7 @@ async def upload(file_path: str, folder_id: str) -> str:
                     if chunk_range is None:
                         logger.info(f'{chunk_range = }')
                         break
-                    # But we need without '='
+                    # But google needs without '=', so:
                     chunk_range = ' '.join(chunk_range.split('='))
                     logger.info(f'{chunk_range = }')
 
