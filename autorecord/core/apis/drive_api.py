@@ -90,14 +90,17 @@ async def upload(file_path: str, folder_id: str) -> str:
         async with AIOFile(file_path, 'rb') as afp:
             file_size = str(os.stat(file_path).st_size)
             reader = Reader(afp, chunk_size=256 * 1024 * 20)  # 5MB
-            chunk_range = f"bytes=0-{256 * 1024 * 20 - 1}"
+            chunk_range = f"bytes 0-{256 * 1024 * 20 - 1}"
             async for chunk in reader:
                 chunk_size = len(chunk)
                 logger.info(f'{chunk_size = }')
                 async with session.put(session_url, data=chunk, ssl=False,
                                        headers={"Content-Length": str(chunk_size),
                                                 "Content-Range": f"{chunk_range}/{file_size}"}) as resp:
+                    # Gives bytes=.../...
                     chunk_range = resp.headers.get('Range')
+                    # But we need without '='
+                    chunk_range = ' '.join(chunk_range.split('='))
                     logger.info(f'{resp.status = }')
                     logger.info(f'{await resp.text() = }')
                     logger.info(f'{chunk_range = }')
