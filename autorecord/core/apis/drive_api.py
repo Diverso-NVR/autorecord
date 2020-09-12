@@ -100,7 +100,7 @@ async def upload(file_path: str, folder_id: str) -> str:
                     chunk_range = resp.headers.get(
                         'Range', chunk_range + chunk_size) + 1
                     logger.info(f'{resp.status = }')
-                    logger.info(f{chunk_range=})
+                    logger.info(f'{chunk_range = }')
 
     os.remove(file_path)
 
