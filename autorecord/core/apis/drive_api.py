@@ -88,7 +88,6 @@ async def upload(file_path: str, folder_id: str) -> str:
             session_url = resp.headers.get('Location')
 
         async with AIOFile(file_path, 'rb') as afp:
-            file_size = str(os.stat(file_path).st_size)
             reader = Reader(afp, chunk_size=256 * 1024 * 20)  # 5MB
             chunk_range = 0
             async for chunk in reader:
@@ -96,7 +95,7 @@ async def upload(file_path: str, folder_id: str) -> str:
                 async with session.put(session_url, data=chunk, ssl=False,
                                        headers={"Content-Length": str(chunk_size),
                                                 "Content-Range": f"bytes {chunk_range}-{chunk_range + chunk_size}/{file_size}"}) as resp:
-                    chunk_range = resp.headers.get('Range')
+                    chunk_range = resp.headers.get('Range') + 1
 
     os.remove(file_path)
 
