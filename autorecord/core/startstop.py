@@ -1,12 +1,14 @@
 import datetime
 import logging
 import os
-import queue
 import signal
 import subprocess
-import threading
+from threading import Thread, RLock
 from datetime import datetime
 from pathlib import Path
+
+import asyncio
+import concurrent.futures
 
 import pytz
 
@@ -19,20 +21,11 @@ logger = logging.getLogger('autorecord_logger')
 
 class RecordHandler:
     def __init__(self):
-        self.q = queue.Queue()
-        self.lock = threading.RLock()
         self.rooms = {}
         self.processes = {}
         self.record_names = {}
         self.video_ffmpeg_outputs = {}
         self.audio_ffmpeg_output = None
-        threading.Thread(target=self.worker).start()
-
-    def worker(self):
-        while True:
-            room = self.q.get()
-            self.prepare_records_and_upload(room)
-            self.q.task_done()
 
     def config(self, room_id: int, room_name: str) -> None:
         logger.info(f'Starting configuring room {room_name} with id {room_id}')
@@ -97,8 +90,22 @@ class RecordHandler:
                                        stderr=self.video_ffmpeg_outputs[source.ip])
             self.processes[room_id].append(process)
 
-    def kill_records(self, room: Room) -> bool:
+    def stop_records(self, rooms):
+        if not self.processes:
+            return
+
+        for room in rooms:
+            self.kill_room_records(room)
+
+        Thread(target=asyncio.run, args=(self.start_tasks(rooms),)).start()
+
+    async def start_tasks(self, rooms):
+        await asyncio.gather(*[self.prepare_records_and_upload(room) for room in rooms])
+
+    def kill_room_records(self, room: Room) -> bool:
         logger.info(f'Starting killing records in room {room.name}')
+        if not self.processes.get(room.id):
+            return
 
         try:
             for process in self.processes[room.id]:
@@ -114,8 +121,6 @@ class RecordHandler:
 
             del self.processes[room.id]
 
-            self.q.put(room)
-
             logger.info(f'Successfully killed records in room {room.name}')
             return True
         except Exception:
@@ -123,35 +128,40 @@ class RecordHandler:
                 f'Failed to kill records in room {room.name}', exc_info=True)
             return False
 
-    def prepare_records_and_upload(self, room: Room) -> None:
+    async def prepare_records_and_upload(self, room: Room) -> None:
         logger.info(f'Preparing and uploading records from room {room.name}')
+
+        if not self.record_names.get(room.id):
+            return
 
         record_name = self.record_names[room.id]
         room_folder_id = room.drive.split('/')[-1]
 
         date, time = record_name.split('_')[0], record_name.split('_')[1]
-        folders = get_folder_by_name(date)
+        folders = await get_folder_by_name(date)
 
         for folder_id, folder_parent_id in folders.items():
             if folder_parent_id == room_folder_id:
-                time_folder_url = create_folder(time, folder_id)
+                time_folder_url = await create_folder(time, folder_id)
                 break
         else:
-            date_folder_url = create_folder(date, room_folder_id)
-            time_folder_url = create_folder(
+            date_folder_url = await create_folder(date, room_folder_id)
+            time_folder_url = await create_folder(
                 time, date_folder_url.split('/')[-1])
 
-        self.sync_and_upload(
+        await self.sync_and_upload(
             record_name, room.sources, time_folder_url.split('/')[-1])
 
-    def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
+    async def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
         logger.info(
             f'Syncing video and audio and uploading record {record_name} to folder {folder_id}')
 
         res = ""
         if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
-            for source in room_sources:
-                self.add_sound(record_name, source.ip.split('.')[-1])
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(room_sources)) as pool:
+                await asyncio.gather(*[self.async_add_sound(pool, source, record_name)
+                                       for source in room_sources])
+
             try:
                 os.remove(f'{HOME}/vids/sound_{record_name}.aac')
             except:
@@ -160,46 +170,50 @@ class RecordHandler:
         else:
             res = "vid_"
 
-        for source in room_sources:
-            try:
-                file_name = res + record_name + \
-                    source.ip.split('.')[-1] + ".mp4"
+        await asyncio.gather(*[self.uploader(res, record_name, source, folder_id)
+                               for source in room_sources])
 
-                upload(HOME + "/vids/" + file_name, folder_id)
-            except FileNotFoundError:
-                pass
-            except:
-                logger.error(
-                    f'Failed to upload file {file_name} to folder {folder_id}', exc_info=True)
-
-            try:
-                os.remove(HOME + "/vids/" + file_name)
-            except FileNotFoundError:
-                pass
-            except:
-                logger.warning(f'Failed to remove file {file_name}')
+    async def async_add_sound(self, pool, source, record_name):
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            pool, self.add_sound, record_name, source.ip.split('.')[-1])
 
     def add_sound(self, record_name: str, source_id: str) -> None:
-        logger.info(f'Adding sound to record {record_name}')
+        logger.info(f'Adding sound to record {record_name}{source_id}')
 
-        with self.lock:
-            add_sound_ffmpeg_output = open(
-                f"autorec_sound_add_ffmpeg_log.txt", "a")
+        add_sound_ffmpeg_output = open(
+            f"autorec_sound_add_ffmpeg_log.txt", "a")
 
-            add_sound_ffmpeg_output.write(
-                f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
+        add_sound_ffmpeg_output.write(
+            f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
 
-            proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
-                                     HOME + "/vids/vid_" + record_name + source_id +
-                                     ".mp4", "-y", "-shortest", "-c", "copy",
-                                     HOME + "/vids/" + record_name + source_id + ".mp4"],
-                                    shell=False,
-                                    stdout=add_sound_ffmpeg_output,
-                                    stderr=add_sound_ffmpeg_output)
-            proc.wait()
-            add_sound_ffmpeg_output.close()
-            try:
-                os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
-            except:
-                logger.warning(
-                    f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')
+        proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
+                                 HOME + "/vids/vid_" + record_name + source_id +
+                                 ".mp4", "-y", "-shortest", "-c", "copy",
+                                 HOME + "/vids/" + record_name + source_id + ".mp4"],
+                                shell=False,
+                                stdout=add_sound_ffmpeg_output,
+                                stderr=add_sound_ffmpeg_output)
+        proc.wait()
+        add_sound_ffmpeg_output.close()
+        try:
+            os.remove(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+        except:
+            logger.warning(
+                f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')
+
+    async def uploader(self, res, record_name, source, folder_id):
+        try:
+            file_name = res + record_name + \
+                source.ip.split('.')[-1] + ".mp4"
+            logger.info(
+                f'Uploading {HOME + "/vids/" + file_name}')
+
+            await upload(HOME + "/vids/" + file_name, folder_id)
+
+        except FileNotFoundError:
+            logger.warning(
+                f'File {HOME + "/vids/" + file_name} doesn`t exist')
+        except:
+            logger.error(
+                f'Failed to upload file {file_name}', exc_info=True)
