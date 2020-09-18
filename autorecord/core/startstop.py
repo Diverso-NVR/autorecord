@@ -60,6 +60,7 @@ class RecordHandler:
 
         self.audio_ffmpeg_output.write(
             f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
+        self.audio_ffmpeg_output.flush()
 
         sound = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i rtsp://" +
                                  room.sound_source + " -y -c:a copy -vn -f mp4 " + HOME + "/vids/sound_"
@@ -79,6 +80,7 @@ class RecordHandler:
 
             self.video_ffmpeg_outputs[source.ip].write(
                 f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
+            self.video_ffmpeg_outputs[source.ip].flush()
 
             process = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i " +
                                        source.rtsp + " -y -c:v copy -an -f mp4 " + HOME + "/vids/vid_" +
@@ -186,6 +188,7 @@ class RecordHandler:
 
         add_sound_ffmpeg_output.write(
             f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
+        add_sound_ffmpeg_output.flush()
 
         proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
                                  HOME + "/vids/vid_" + record_name + source_id +
