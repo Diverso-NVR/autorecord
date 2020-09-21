@@ -171,4 +171,4 @@ async def get_folder_by_name(name: str) -> dict:
                 folders.extend(resp_json.get('files', []))
                 page_token = resp_json.get('nextPageToken', False)
 
-    return {folder['id']: folder.get('parents', [''])[0] for folder in folders}
+    return {folder['id']: folder.get('parents', []) for folder in folders}

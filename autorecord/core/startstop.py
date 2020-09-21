@@ -135,15 +135,23 @@ class RecordHandler:
 
         if not self.record_names.get(room.id):
             return
-
+        
         record_name = self.record_names[room.id]
-        room_folder_id = room.drive.split('/')[-1]
+        if not os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
+            for source in room.sources:
+                try:
+                    os.remove(record_name + source.ip.split('.')[-1] + ".mp4")
+                except:
+                    logger.warning(
+                        f'Failed to remove file {HOME}/vids/sound_{record_name}.aac')
+            return
 
+        room_folder_id = room.drive.split('/')[-1]
         date, time = record_name.split('_')[0], record_name.split('_')[1]
         folders = await get_folder_by_name(date)
 
-        for folder_id, folder_parent_id in folders.items():
-            if folder_parent_id == room_folder_id:
+        for folder_id, folder_parent_ids in folders.items():
+            if room_folder_id in folder_parent_ids:
                 time_folder_url = await create_folder(time, folder_id)
                 break
         else:
@@ -158,21 +166,18 @@ class RecordHandler:
         logger.info(
             f'Syncing video and audio and uploading record {record_name} to folder {folder_id}')
 
-        res = ""
-        if os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
-            with concurrent.futures.ThreadPoolExecutor(max_workers=len(room_sources)) as pool:
-                await asyncio.gather(*[self.async_add_sound(pool, source, record_name)
-                                       for source in room_sources])
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(room_sources)) as pool:
+            await asyncio.gather(*[self.async_add_sound(pool, source, record_name)
+                                    for source in room_sources])
 
-            try:
-                os.remove(f'{HOME}/vids/sound_{record_name}.aac')
-            except:
-                logger.warning(
-                    f'Failed to remove file {HOME}/vids/sound_{record_name}.aac')
-        else:
-            res = "vid_"
+        try:
+            os.remove(f'{HOME}/vids/sound_{record_name}.aac')
+        except:
+            logger.warning(
+                f'Failed to remove file {HOME}/vids/sound_{record_name}.aac')
+ 
 
-        await asyncio.gather(*[self.uploader(res, record_name, source, folder_id)
+        await asyncio.gather(*[self.uploader(record_name, source, folder_id)
                                for source in room_sources])
 
     async def async_add_sound(self, pool, source, record_name):
@@ -205,9 +210,9 @@ class RecordHandler:
             logger.warning(
                 f'Failed to remove file {HOME}/vids/vid_{record_name}{source_id}.mp4')
 
-    async def uploader(self, res, record_name, source, folder_id):
+    async def uploader(self, record_name, source, folder_id):
         try:
-            file_name = res + record_name + \
+            file_name = record_name + \
                 source.ip.split('.')[-1] + ".mp4"
             logger.info(
                 f'Uploading {HOME + "/vids/" + file_name}')

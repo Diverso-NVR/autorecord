@@ -8,25 +8,28 @@ from core.startstop import RecordHandler
 
 
 class DaemonApp:
-    rooms = None
     record_handler = RecordHandler()
     logger = logging.getLogger('autorecord_logger')
 
     def __init__(self):
         self.logger.info('Class \"DaemonApp\" instantiated')
 
-        schedule.every().hour.at(":00").do(self.start_new_recording)
-        schedule.every().hour.at(":30").do(self.start_new_recording)
+        # Create jobs
+        schedule.every().day.at("9:30").do(self.start_new_recording)
+        for hour in range(10, 21):
+            schedule.every().day.at(f"{hour}:00").do(self.start_new_recording)
+            schedule.every().day.at(f"{hour}:30").do(self.start_new_recording)
+        schedule.every().day.at("21:00").do(self.stop_records)
 
     def start_new_recording(self):
         self.logger.info('Starting recording')
 
         session = Session()
-        self.rooms = session.query(Room).all()
+        rooms = session.query(Room).all()
         session.close()
 
-        self.record_handler.stop_records(self.rooms)
-        for room in self.rooms:
+        self.record_handler.stop_records(rooms)
+        for room in rooms:
             if not room.sources:
                 self.logger.info(
                     f'Room {room.name} has no sources, skipping room')
@@ -37,6 +40,14 @@ class DaemonApp:
             except Exception:
                 self.logger.error(
                     f'Unable to kill/start records in room {room.name}', exc_info=True)
+
+    def stop_records(self):
+        self.logger.info('Stoping daemon')
+        session = Session()
+        rooms = session.query(Room).all()
+        session.close()
+
+        self.record_handler.stop_records(rooms)
 
     def run(self):
         while True:
