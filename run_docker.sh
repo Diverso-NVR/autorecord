@@ -3,6 +3,7 @@ docker rm nvr_autorecord
 docker build -t nvr_autorecord .
 docker run -d \
  -it \
+ --restart on-failure \
  --name nvr_autorecord \
  --net=host \
  --env-file ../.env_nvr \
