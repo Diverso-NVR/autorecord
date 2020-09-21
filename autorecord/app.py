@@ -15,7 +15,7 @@ class DaemonApp:
         self.logger.info('Class \"DaemonApp\" instantiated')
 
         # Create jobs
-        schedule.every().day.at("9:30").do(self.start_new_recording)
+        schedule.every().day.at("09:30").do(self.start_new_recording)
         for hour in range(10, 21):
             schedule.every().day.at(f"{hour}:00").do(self.start_new_recording)
             schedule.every().day.at(f"{hour}:30").do(self.start_new_recording)
