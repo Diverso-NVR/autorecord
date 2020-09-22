@@ -27,7 +27,7 @@ class RecordHandler:
         self.video_ffmpeg_outputs = {}
         self.audio_ffmpeg_output = None
     
-    def remove_file(filename: str) -> None:
+    def remove_file(self, filename: str) -> None:
         try:
             os.remove(filename)
         except:
