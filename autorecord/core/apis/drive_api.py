@@ -106,8 +106,6 @@ async def upload(file_path: str, folder_id: str) -> str:
                     _, received_bytes_lower = bytes_data.split('-')
                     received_bytes_lower = int(received_bytes_lower) + 1
 
-    os.remove(file_path)
-
     logger.info(
         f'Uploaded {file_path}')
 
