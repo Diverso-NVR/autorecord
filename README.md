@@ -79,6 +79,9 @@ ROOM_NAME=room_name # Для одноплатников
 
 ```bash
 mkdir ~/creds
+
+# Со свеого хоста
+scp token*.pickle username@host_ip:/home/username/creds/
 ```
 
 Запустить сервис

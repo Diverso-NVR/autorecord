@@ -14,12 +14,15 @@ class DaemonApp:
     def __init__(self):
         self.logger.info('Class \"DaemonApp\" instantiated')
 
-        # Create jobs
-        schedule.every().day.at("09:30").do(self.start_new_recording)
-        for hour in range(10, 21):
-            schedule.every().day.at(f"{hour}:00").do(self.start_new_recording)
-            schedule.every().day.at(f"{hour}:30").do(self.start_new_recording)
-        schedule.every().day.at("21:00").do(self.stop_records)
+        # Create jobs from monday to saturday to record during classes time
+        for weekday in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']:
+            eval(f'schedule.every().{weekday}.at("09:30").do(self.start_new_recording)')
+
+            for hour in range(10, 21):
+                eval(f'schedule.every().{weekday}.at("{hour}:00").do(self.start_new_recording)')
+                eval(f'schedule.every().{weekday}.at("{hour}:30").do(self.start_new_recording)')
+
+            eval(f'schedule.every().{weekday}.at("21:00").do(self.stop_records)')
 
     def start_new_recording(self):
         self.logger.info('Starting recording')
