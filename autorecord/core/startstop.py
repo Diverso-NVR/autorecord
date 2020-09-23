@@ -30,8 +30,11 @@ class RecordHandler:
     def remove_file(self, filename: str) -> None:
         try:
             os.remove(filename)
-        except:
+        except FileNotFoundError:
             logger.warning(f'Failed to remove file {filename}')
+        except:
+            logger.error(
+                f'Failed to remove file {filename}', exc_info=True)
 
     def config(self, room_id: int, room_name: str) -> None:
         logger.info(f'Starting configuring room {room_name} with id {room_id}')
@@ -213,12 +216,14 @@ class RecordHandler:
             file_name = record_name + \
                 source.ip.split('.')[-1] + ".mp4"
             logger.info(
-                f'Uploading {HOME + "/vids/" + file_name}')
+                f'Uploading {HOME}/vids/{file_name}')
 
-            await upload(HOME + "/vids/" + file_name, folder_id)
+            await upload(f'{HOME}/vids/{file_name}', folder_id)
+        except FileNotFoundError:
+            pass
         except:
             logger.error(
                 f'Failed to upload file {file_name}', exc_info=True)
         finally:
-            self.remove_file(file_name)
+            self.remove_file(f'{HOME}/vids/{file_name}')
 
