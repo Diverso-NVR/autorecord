@@ -56,23 +56,13 @@ HEADERS = {
 logger = logging.getLogger('autorecord_logger')
 
 
-def token_check(func):
-    async def wrapper(*args, **kwargs):
-        if creds.expiry + timedelta(hours=3) <= datetime.now():  # refresh token
-            logger.info("Recreating google creds")
-
-            loop = asyncio.get_running_loop()
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                await loop.run_in_executor(
-                    pool, creds_generate)
-
-            HEADERS["Authorization"] = f"Bearer {creds.token}"
-        return await func(*args, **kwargs)
-
-    return wrapper
+def creds_check():
+    if creds.expiry + timedelta(hours=3) <= datetime.now():  # refresh token
+        logger.info("Recreating google creds")
+        creds_generate()
+        HEADERS["Authorization"] = f"Bearer {creds.token}"
 
 
-@token_check
 async def upload(file_path: str, folder_id: str) -> str:
     meta_data = {
         "name": file_path.split('/')[-1],
@@ -110,7 +100,6 @@ async def upload(file_path: str, folder_id: str) -> str:
         f'Uploaded {file_path}')
 
 
-@token_check
 async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
     """
     Creates folder in format: 'folder_name'
@@ -148,7 +137,6 @@ async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
     return f"https://drive.google.com/drive/u/1/folders/{folder_id}"
 
 
-@token_check
 async def get_folder_by_name(name: str) -> dict:
     logger.info(f'Getting the id of folder with name {name}')
 
