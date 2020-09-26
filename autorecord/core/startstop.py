@@ -21,12 +21,12 @@ logger = logging.getLogger('autorecord_logger')
 
 class RecordHandler:
     def __init__(self):
-        self.rooms = {}
         self.processes = {}
         self.record_names = {}
+        self.previous_record_names = {}
         self.video_ffmpeg_outputs = {}
         self.audio_ffmpeg_output = None
-    
+
     def remove_file(self, filename: str) -> None:
         try:
             os.remove(filename)
@@ -36,11 +36,52 @@ class RecordHandler:
             logger.error(
                 f'Failed to remove file {filename}', exc_info=True)
 
-    def config(self, room_id: int, room_name: str) -> None:
-        logger.info(f'Starting configuring room {room_name} with id {room_id}')
+    def start_record(self, room: Room) -> None:
+        logger.info(f'Starting recording in room {room.name}')
 
-        self.rooms[room_id] = {"name": room_name}
-        self.processes[room_id] = []
+        self.config(room)
+
+        self.audio_ffmpeg_output = open(
+            f"autorec_{room.name}_audio_log.txt", "a")
+
+        self.audio_ffmpeg_output.write(
+            f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
+        self.audio_ffmpeg_output.flush()
+
+        sound = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i rtsp://" +
+                                 room.sound_source + " -y -c:a copy -vn -f mp4 " + HOME + "/vids/sound_"
+                                 + self.record_names[room.id] + ".aac",
+                                 shell=True,
+                                 preexec_fn=os.setsid,
+                                 stdout=self.audio_ffmpeg_output,
+                                 stderr=self.audio_ffmpeg_output)
+        self.processes[room.id].append(sound)
+
+        for source in room.sources:
+            if not source.rtsp:
+                continue
+
+            self.video_ffmpeg_outputs[source.ip] = open(
+                f"autorec_{room.name}_{source.ip.replace('.', '_')}_video_log.txt", "a")
+
+            self.video_ffmpeg_outputs[source.ip].write(
+                f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
+            self.video_ffmpeg_outputs[source.ip].flush()
+
+            process = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i " +
+                                       source.rtsp + " -y -c:v copy -an -f mp4 " + HOME + "/vids/vid_" +
+                                       self.record_names[room.id] +
+                                       source.ip.split('.')[-1] + ".mp4",
+                                       shell=True,
+                                       preexec_fn=os.setsid,
+                                       stdout=self.video_ffmpeg_outputs[source.ip],
+                                       stderr=self.video_ffmpeg_outputs[source.ip])
+            self.processes[room.id].append(process)
+
+    def config(self, room: Room) -> None:
+        logger.info(f'Starting configuring room {room.name} with id {room.id}')
+
+        self.processes[room.id] = []
 
         current_date = datetime.now(tz=pytz.timezone('Europe/Moscow'))
         today = current_date.date()
@@ -56,50 +97,7 @@ class RecordHandler:
                  str(current_time.minute) if current_time.minute < 10 else str(
                      current_time.minute)
 
-        self.record_names[room_id] = f"{today.year}-{month}-{day}_{hour}:{minute}_{self.rooms[room_id]['name']}_"
-
-    def start_record(self, room: Room) -> None:
-        logger.info(f'Starting recording in room {room.name}')
-
-        self.config(room.id, room.name)
-        room_id = room.id
-
-        self.audio_ffmpeg_output = open(
-            f"autorec_{room.name}_audio_log.txt", "a")
-
-        self.audio_ffmpeg_output.write(
-            f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
-        self.audio_ffmpeg_output.flush()
-
-        sound = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i rtsp://" +
-                                 room.sound_source + " -y -c:a copy -vn -f mp4 " + HOME + "/vids/sound_"
-                                 + self.record_names[room_id] + ".aac",
-                                 shell=True,
-                                 preexec_fn=os.setsid,
-                                 stdout=self.audio_ffmpeg_output,
-                                 stderr=self.audio_ffmpeg_output)
-        self.processes[room_id].append(sound)
-
-        for source in room.sources:
-            if not source.rtsp:
-                continue
-
-            self.video_ffmpeg_outputs[source.ip] = open(
-                f"autorec_{room.name}_{source.ip.replace('.', '_')}_video_log.txt", "a")
-
-            self.video_ffmpeg_outputs[source.ip].write(
-                f"\nCurrent DateTime: {datetime.now(tz=pytz.timezone('Europe/Moscow'))}\n")
-            self.video_ffmpeg_outputs[source.ip].flush()
-
-            process = subprocess.Popen("ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i " +
-                                       source.rtsp + " -y -c:v copy -an -f mp4 " + HOME + "/vids/vid_" +
-                                       self.record_names[room_id] +
-                                       source.ip.split('.')[-1] + ".mp4",
-                                       shell=True,
-                                       preexec_fn=os.setsid,
-                                       stdout=self.video_ffmpeg_outputs[source.ip],
-                                       stderr=self.video_ffmpeg_outputs[source.ip])
-            self.processes[room_id].append(process)
+        self.record_names[room.id] = f"{today.year}-{month}-{day}_{hour}:{minute}_{room.name}_"
 
     def stop_records(self, rooms):
         if not self.processes:
@@ -109,15 +107,16 @@ class RecordHandler:
             if not self.kill_room_records(room):
                 rooms.remove(room)
 
-        Thread(target=asyncio.run, args=(self.start_tasks(rooms),)).start()
+        self.previous_record_names = dict(self.record_names)
+        self.record_names = {}
+        self.processes = {}
 
-    async def start_tasks(self, rooms):
-        await asyncio.gather(*[self.prepare_records_and_upload(room) for room in rooms])
+        Thread(target=asyncio.run, args=(self.start_tasks(rooms),)).start()
 
     def kill_room_records(self, room: Room) -> bool:
         logger.info(f'Starting killing records in room {room.name}')
         if not self.processes.get(room.id):
-            return
+            return False
 
         try:
             for process in self.processes[room.id]:
@@ -131,8 +130,6 @@ class RecordHandler:
                 except OSError:
                     os.system("kill %s" % process.pid)
 
-            del self.processes[room.id]
-
             logger.info(f'Successfully killed records in room {room.name}')
             return True
         except Exception:
@@ -140,21 +137,27 @@ class RecordHandler:
                 f'Failed to kill records in room {room.name}', exc_info=True)
             return False
 
+    async def start_tasks(self, rooms):
+        await asyncio.gather(*[self.prepare_records_and_upload(room) for room in rooms])
+
     async def prepare_records_and_upload(self, room: Room) -> None:
         logger.info(f'Preparing and uploading records from room {room.name}')
 
-        if not self.record_names.get(room.id):
+        record_name = self.previous_record_names.get(room.id)
+
+        if not record_name:
             return
-        
-        record_name = self.record_names[room.id]
+
         if not os.path.exists(f'{HOME}/vids/sound_{record_name}.aac'):
             for source in room.sources:
                 source_id = source.ip.split('.')[-1]
-                self.remove_file(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
+                self.remove_file(
+                    f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
             return
 
         room_folder_id = room.drive.split('/')[-1]
-        date, time = record_name.split('_')[0], record_name.split('_')[1]
+        record_info = record_name.split('_')
+        date, time, _, _ = record_info
         folders = await get_folder_by_name(date)
 
         for folder_id, folder_parent_ids in folders.items():
@@ -176,10 +179,10 @@ class RecordHandler:
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(room_sources)) as pool:
                 await asyncio.gather(*[self.async_add_sound(pool, source, record_name)
-                                        for source in room_sources])
+                                       for source in room_sources])
 
             await asyncio.gather(*[self.uploader(record_name, source, folder_id)
-                                for source in room_sources])
+                                   for source in room_sources])
         finally:
             self.remove_file(f'{HOME}/vids/sound_{record_name}.aac')
 
@@ -200,9 +203,9 @@ class RecordHandler:
 
         try:
             proc = subprocess.Popen(["ffmpeg", "-i", HOME + "/vids/sound_" + record_name + ".aac", "-i",
-                                    HOME + "/vids/vid_" + record_name + source_id +
-                                    ".mp4", "-y", "-shortest", "-c", "copy",
-                                    HOME + "/vids/" + record_name + source_id + ".mp4"],
+                                     HOME + "/vids/vid_" + record_name + source_id +
+                                     ".mp4", "-y", "-shortest", "-c", "copy",
+                                     HOME + "/vids/" + record_name + source_id + ".mp4"],
                                     shell=False,
                                     stdout=add_sound_ffmpeg_output,
                                     stderr=add_sound_ffmpeg_output)
@@ -226,4 +229,3 @@ class RecordHandler:
                 f'Failed to upload file {file_name}', exc_info=True)
         finally:
             self.remove_file(f'{HOME}/vids/{file_name}')
-
