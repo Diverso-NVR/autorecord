@@ -4,7 +4,6 @@ import time
 import schedule
 
 from core.db.models import Room, Session
-from core.apis.drive_api import creds_check
 from core.startstop import RecordHandler
 
 
@@ -35,8 +34,6 @@ class DaemonApp:
         session = Session()
         rooms = session.query(Room).all()
         session.close()
-
-        creds_check()
 
         self.record_handler.stop_records(rooms)
         for room in rooms:
