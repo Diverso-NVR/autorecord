@@ -56,19 +56,17 @@ HEADERS = {
 logger = logging.getLogger('autorecord_logger')
 
 
-def creds_check():
-    if creds.expiry + timedelta(hours=3, minutes=30) <= datetime.now():  # refresh token
-        logger.info("Recreating google creds")
-        creds_generate()
-        HEADERS["Authorization"] = f"Bearer {creds.token}"
-
-def token_decor(func):
+def creds_check(func):
     async def wrapper(*args, **kwargs):
-        creds_check()
+        # refresh token
+        if creds.expiry + timedelta(hours=3, minutes=30) <= datetime.now():
+            logger.info("Recreating google creds")
+            creds_generate()
+            HEADERS["Authorization"] = f"Bearer {creds.token}"
         return await func(*args, **kwargs)
     return wrapper
 
-@token_decor
+
 async def upload(file_path: str, folder_id: str) -> str:
     meta_data = {
         "name": file_path.split('/')[-1],
@@ -106,7 +104,6 @@ async def upload(file_path: str, folder_id: str) -> str:
         f'Uploaded {file_path}')
 
 
-@token_decor
 async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
     """
     Creates folder in format: 'folder_name'
@@ -144,7 +141,6 @@ async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
     return f"https://drive.google.com/drive/u/1/folders/{folder_id}"
 
 
-@token_decor
 async def get_folder_by_name(name: str) -> dict:
     logger.info(f'Getting the id of folder with name {name}')
 
