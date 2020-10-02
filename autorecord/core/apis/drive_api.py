@@ -56,7 +56,7 @@ HEADERS = {
 logger = logging.getLogger('autorecord_logger')
 
 
-def refresh_token(func):
+def refresh_token():
     logger.info("Recreating google creds")
     creds_generate()
     HEADERS["Authorization"] = f"Bearer {creds.token}"
