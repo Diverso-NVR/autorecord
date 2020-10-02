@@ -56,15 +56,10 @@ HEADERS = {
 logger = logging.getLogger('autorecord_logger')
 
 
-def creds_check(func):
-    async def wrapper(*args, **kwargs):
-        # refresh token
-        if creds.expiry + timedelta(hours=3, minutes=30) <= datetime.now():
-            logger.info("Recreating google creds")
-            creds_generate()
-            HEADERS["Authorization"] = f"Bearer {creds.token}"
-        return await func(*args, **kwargs)
-    return wrapper
+def refresh_token(func):
+    logger.info("Recreating google creds")
+    creds_generate()
+    HEADERS["Authorization"] = f"Bearer {creds.token}"
 
 
 async def upload(file_path: str, folder_id: str) -> str:
