@@ -1,5 +1,6 @@
 import logging
 import time
+from threading import Thread
 
 import schedule
 
@@ -45,11 +46,7 @@ class DaemonApp:
                     f'Room {room.name} has no sources, skipping room')
                 continue
 
-            try:
-                self.record_handler.start_record(room)
-            except Exception:
-                self.logger.error(
-                    f'Unable to kill/start records in room {room.name}', exc_info=True)
+            Thread(target=self.record_handler.start_record, args=(room,)).start()
 
     def stop_records(self):
         self.logger.info('Stoping daemon')
