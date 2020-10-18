@@ -3,6 +3,7 @@ import logging
 import os
 import signal
 import subprocess
+from threading import Thread
 from datetime import datetime
 from pathlib import Path
 
@@ -110,7 +111,7 @@ class RecordHandler:
         self.record_names = {}
         self.processes = {}
 
-        asyncio.run(self.put_in_loop(rooms))
+        Thread(target=asyncio.run, args=(self.start_tasks(rooms),)).start()
 
     def kill_room_records(self, room: Room) -> bool:
         logger.info(f'Starting killing records in room {room.name}')
@@ -135,9 +136,6 @@ class RecordHandler:
             logger.error(
                 f'Failed to kill records in room {room.name}', exc_info=True)
             return False
-
-    async def put_in_loop(self, rooms):
-        asyncio.create_task(self.start_tasks(rooms))
 
     async def start_tasks(self, rooms):
         await asyncio.gather(*[self.prepare_records_and_upload(room) for room in rooms])
