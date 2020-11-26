@@ -18,8 +18,8 @@ SCOPES = 'https://www.googleapis.com/auth/drive'
 Setting up drive
 """
 creds = None
-token_path = 'core/creds/tokenDrive.pickle'
-creds_path = 'core/creds/credentials.json'
+token_path = '/autorecord/creds/tokenDrive.pickle'
+creds_path = '/autorecord/core/creds/credentials.json'
 
 logger = logging.getLogger('autorecord_logger')
 
