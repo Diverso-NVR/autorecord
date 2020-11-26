@@ -7,7 +7,6 @@ from threading import Thread
 from datetime import datetime
 from pathlib import Path
 
-import asyncio
 import concurrent.futures
 
 import pytz
@@ -111,7 +110,7 @@ class RecordHandler:
         self.record_names = {}
         self.processes = {}
 
-        Thread(target=asyncio.run, args=(self.start_tasks(rooms),)).start()
+        Thread(target=self.start_tasks, args=(rooms,)).start()
 
     def kill_room_records(self, room: Room) -> bool:
         logger.info(f'Starting killing records in room {room.name}')
@@ -137,10 +136,15 @@ class RecordHandler:
                 f'Failed to kill records in room {room.name}', exc_info=True)
             return False
 
-    async def start_tasks(self, rooms):
-        await asyncio.gather(*[self.prepare_records_and_upload(room) for room in rooms])
+    def start_tasks(self, rooms):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(rooms)) as executor:
+            futures = {executor.submit(self.prepare_records_and_upload, room): room.name for room in rooms}
 
-    async def prepare_records_and_upload(self, room: Room) -> None:
+            for future in concurrent.futures.as_completed(futures):
+                    room_name = futures[future]
+                    logger.info(f"{room_name} is done")
+
+    def prepare_records_and_upload(self, room: Room) -> None:
         logger.info(f'Preparing and uploading records from room {room.name}')
 
         record_name = self.previous_record_names.get(room.id)
@@ -158,38 +162,33 @@ class RecordHandler:
         room_folder_id = room.drive.split('/')[-1]
         record_info = record_name.split('_')
         date, time, _, _ = record_info
-        folders = await get_folder_by_name(date)
+        folders = get_folder_by_name(date)
 
         for folder_id, folder_parent_ids in folders.items():
             if room_folder_id in folder_parent_ids:
-                time_folder_url = await create_folder(time, folder_id)
+                time_folder_url = create_folder(time, folder_id)
                 break
         else:
-            date_folder_url = await create_folder(date, room_folder_id)
-            time_folder_url = await create_folder(
+            date_folder_url = create_folder(date, room_folder_id)
+            time_folder_url = create_folder(
                 time, date_folder_url.split('/')[-1])
 
-        await self.sync_and_upload(
+        self.sync_and_upload(
             record_name, room.sources, time_folder_url.split('/')[-1])
 
-    async def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
+    def sync_and_upload(self, record_name: str, room_sources: list, folder_id: str) -> None:
         logger.info(
             f'Syncing video and audio and uploading record {record_name} to folder {folder_id}')
 
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=len(room_sources)) as pool:
-                await asyncio.gather(*[self.async_add_sound(pool, source, record_name)
-                                       for source in room_sources])
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(room_sources)) as executor:
+                futures = {executor.submit(self.add_sound, record_name, source.ip.split('.')[-1]): (record_name, source, folder_id) for source in room_sources}
 
-            await asyncio.gather(*[self.uploader(record_name, source, folder_id)
-                                   for source in room_sources])
+                for future in concurrent.futures.as_completed(futures):
+                    record_name, source, folder_id = futures[future]
+                    executor.submit(self.uploader, record_name, source, folder_id)
         finally:
             self.remove_file(f'{HOME}/vids/sound_{record_name}.aac')
-
-    async def async_add_sound(self, pool, source, record_name):
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(
-            pool, self.add_sound, record_name, source.ip.split('.')[-1])
 
     def add_sound(self, record_name: str, source_id: str) -> None:
         logger.info(f'Adding sound to record {record_name}{source_id}')
@@ -214,14 +213,14 @@ class RecordHandler:
         finally:
             self.remove_file(f'{HOME}/vids/vid_{record_name}{source_id}.mp4')
 
-    async def uploader(self, record_name, source, folder_id):
+    def uploader(self, record_name, source, folder_id):
         try:
             file_name = record_name + \
                 source.ip.split('.')[-1] + ".mp4"
             logger.info(
                 f'Uploading {HOME}/vids/{file_name}')
 
-            await upload(f'{HOME}/vids/{file_name}', folder_id)
+            upload(f'{HOME}/vids/{file_name}', folder_id)
         except FileNotFoundError:
             pass
         except:

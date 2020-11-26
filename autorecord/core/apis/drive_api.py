@@ -1,22 +1,16 @@
 from __future__ import print_function
 
-import logging
 import os.path
-import os
-import json
 import pickle
-import requests
-from datetime import datetime, timedelta
-
-import asyncio
-from aiohttp import ClientSession
-from aiofile import AIOFile, Reader
-import concurrent.futures
+from threading import RLock
+import logging
 
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+
+lock = RLock()
 
 
 SCOPES = 'https://www.googleapis.com/auth/drive'
@@ -24,136 +18,84 @@ SCOPES = 'https://www.googleapis.com/auth/drive'
 Setting up drive
 """
 creds = None
-TOKEN_PATH = '/autorecord/creds/tokenDrive.pickle'
-CREDS_PATH = '/autorecord/creds/credentials.json'
-
-
-# TODO: try to do it DRY
-def creds_generate():
-    global creds
-    if os.path.exists(TOKEN_PATH):
-        with open(TOKEN_PATH, 'rb') as token:
-            creds = pickle.load(token)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                CREDS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_PATH, 'wb') as token:
-            pickle.dump(creds, token)
-
-
-creds_generate()
-UPLOAD_API_URL = 'https://www.googleapis.com/upload/drive/v3'
-API_URL = 'https://www.googleapis.com/drive/v3'
-HEADERS = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {creds.token}"
-}
+token_path = 'core/creds/tokenDrive.pickle'
+creds_path = 'core/creds/credentials.json'
 
 logger = logging.getLogger('autorecord_logger')
 
+if os.path.exists(token_path):
+    with open(token_path, 'rb') as token:
+        creds = pickle.load(token)
+if not creds or not creds.valid:
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    else:
+        flow = InstalledAppFlow.from_client_secrets_file(
+            creds_path, SCOPES)
+        creds = flow.run_local_server(port=0)
+    with open(token_path, 'wb') as token:
+        pickle.dump(creds, token)
 
-def refresh_token():
-    logger.info("Recreating google creds")
-    creds_generate()
-    HEADERS["Authorization"] = f"Bearer {creds.token}"
-
-
-async def upload(file_path: str, folder_id: str) -> str:
-    meta_data = {
-        "name": file_path.split('/')[-1],
-        "parents": [folder_id]
-    }
-
-    async with ClientSession() as session:
-        async with session.post(f'{UPLOAD_API_URL}/files?uploadType=resumable',
-                                headers={**HEADERS,
-                                         **{"X-Upload-Content-Type": "video/mp4"}},
-                                json=meta_data,
-                                ssl=False) as resp:
-            session_url = resp.headers.get('Location')
-
-        async with AIOFile(file_path, 'rb') as afp:
-            file_size = str(os.stat(file_path).st_size)
-            reader = Reader(afp, chunk_size=256 * 1024 * 100)  # 25MB
-            received_bytes_lower = 0
-            async for chunk in reader:
-                chunk_size = len(chunk)
-                chunk_range = f"bytes {received_bytes_lower}-{received_bytes_lower + chunk_size - 1}"
-
-                async with session.put(session_url, data=chunk, ssl=False,
-                                       headers={"Content-Length": str(chunk_size),
-                                                "Content-Range": f"{chunk_range}/{file_size}"}) as resp:
-                    chunk_range = resp.headers.get('Range')
-                    if chunk_range is None:
-                        break
-
-                    _, bytes_data = chunk_range.split('=')
-                    _, received_bytes_lower = bytes_data.split('-')
-                    received_bytes_lower = int(received_bytes_lower) + 1
-
-    logger.info(
-        f'Uploaded {file_path}')
+drive_service = build('drive', 'v3', credentials=creds)
 
 
-async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
+def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
     """
     Creates folder in format: 'folder_name'
     """
-    logger.info(
-        f'Creating folder with name {folder_name} inside folder with id {folder_parent_id}')
-
-    meta_data = {
-        'name': folder_name,
-        'mimeType': 'application/vnd.google-apps.folder'
-    }
-    if folder_parent_id:
-        meta_data['parents'] = [folder_parent_id]
-
-    async with ClientSession() as session:
-        async with session.post(f'{API_URL}/files',
-                                headers=HEADERS,
-                                json=meta_data,
-                                ssl=False) as resp:
-
-            resp_json = await resp.json()
-            folder_id = resp_json['id']
+    with lock:
+        logger.info(f"Creating folder {folder_name}")
+        folder_metadata = {
+            'name': folder_name,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        if folder_parent_id:
+            folder_metadata['parents'] = [folder_parent_id]
+        folder = drive_service.files().create(body=folder_metadata,
+                                              fields='id').execute()
 
         new_perm = {
             'type': 'anyone',
             'role': 'reader'
         }
 
-        async with session.post(f'{API_URL}/files/{folder_id}/permissions',
-                                headers=HEADERS,
-                                json=new_perm,
-                                ssl=False) as resp:
-            pass
+        drive_service.permissions().create(
+            fileId=folder['id'], body=new_perm).execute()
 
-    return f"https://drive.google.com/drive/u/1/folders/{folder_id}"
+        return "https://drive.google.com/drive/u/1/folders/" + folder['id']
 
 
-async def get_folder_by_name(name: str) -> dict:
-    logger.info(f'Getting the id of folder with name {name}')
+def upload(filename: str, folder_id: str) -> str:
+    """
+    Upload file "filename" on drive folder 'folder_id'
+    """
+    with lock:
+        logger.info(f"Uploading {filename}")
+        media = MediaFileUpload(filename, mimetype="video/mp4", resumable=True)
+        file_data = {
+            "name": filename.split('/')[-1],
+            "parents": [folder_id]
+        }
+        file = drive_service.files().create(
+            body=file_data, media_body=media).execute()
+        logger.info(f"Uploaded {filename}")
+        return file.get('id')
 
-    params = dict(
-        fields='nextPageToken, files(name, id, parents)',
-        q=f"mimeType='application/vnd.google-apps.folder'and name='{name}'",
-        spaces='drive'
-    )
-    folders = []
-    page_token = ''
 
-    async with ClientSession() as session:
-        while page_token != False:
-            async with session.get(f'{API_URL}/files?pageToken={page_token}',
-                                   headers=HEADERS, params=params,
-                                   ssl=False) as resp:
-                resp_json = await resp.json()
-                folders.extend(resp_json.get('files', []))
-                page_token = resp_json.get('nextPageToken', False)
+def get_folder_by_name(date: str) -> dict:
+    with lock:
+        logger.info(f"Getting folder by date {date}")
+        page_token = None
 
-    return {folder['id']: folder.get('parents', []) for folder in folders}
+        while True:
+            response = drive_service.files().list(q=f"mimeType='application/vnd.google-apps.folder'"
+                                                    f"and name='{date}'",
+                                                  spaces='drive',
+                                                  fields='nextPageToken, files(name, id, parents)',
+                                                  pageToken=page_token).execute()
+            page_token = response.get('nextPageToken', None)
+
+            if page_token is None:
+                break
+
+        return {folder['id']: folder.get('parents', [''])[0] for folder in response['files']}

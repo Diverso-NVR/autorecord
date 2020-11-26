@@ -10,3 +10,4 @@ logs/
 .idea
 .env
 creds/
+*log.txt

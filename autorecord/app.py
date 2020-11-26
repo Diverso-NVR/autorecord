@@ -1,12 +1,14 @@
 import logging
 import time
+import os
 from threading import Thread
 
 import schedule
 
 from core.db.models import Room, Session
-from core.apis.drive_api import refresh_token
 from core.startstop import RecordHandler
+
+ROOM_NAME = os.environ.get('ROOM_NAME')
 
 
 class DaemonApp:
@@ -16,28 +18,29 @@ class DaemonApp:
     def __init__(self):
         self.logger.info('Class \"DaemonApp\" instantiated')
 
-        # Create jobs from monday to saturday to record during classes time
-        for weekday in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']:
-            eval(
-                f'schedule.every().{weekday}.at("09:30").do(self.start_new_recording)')
+        schedule.every(1).minutes.do(self.start_new_recording) # 2 min records
+        # schedule.every(30).minutes.do(self.start_new_recording) # 30 min records
 
-            for hour in range(10, 21):
-                eval(
-                    f'schedule.every().{weekday}.at("{hour}:00").do(self.start_new_recording)')
-                eval(
-                    f'schedule.every().{weekday}.at("{hour}:30").do(self.start_new_recording)')
+        # # Create jobs from monday to saturday to record during classes time
+        # for weekday in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']:
+        #     eval(
+        #         f'schedule.every().{weekday}.at("09:30").do(self.start_new_recording)')
 
-            eval(
-                f'schedule.every().{weekday}.at("21:00").do(self.stop_records)')
+        #     for hour in range(10, 21):
+        #         eval(
+        #             f'schedule.every().{weekday}.at("{hour}:00").do(self.start_new_recording)')
+        #         eval(
+        #             f'schedule.every().{weekday}.at("{hour}:30").do(self.start_new_recording)')
+
+        #     eval(
+        #         f'schedule.every().{weekday}.at("21:00").do(self.stop_records)')
 
     def start_new_recording(self):
         self.logger.info('Starting recording')
 
         session = Session()
-        rooms = session.query(Room).all()
+        rooms = session.query(Room).filter(Room.name == ROOM_NAME).all()
         session.close()
-
-        refresh_token()
 
         self.record_handler.stop_records(rooms)
         for room in rooms:
@@ -85,4 +88,5 @@ if __name__ == "__main__":
     DaemonApp.create_logger()
 
     daemon_app = DaemonApp()
+    daemon_app.start_new_recording()
     daemon_app.run()
