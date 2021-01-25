@@ -19,41 +19,37 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 
-SCOPES = 'https://www.googleapis.com/auth/drive'
+SCOPES = "https://www.googleapis.com/auth/drive"
 """
 Setting up drive
 """
 creds = None
-TOKEN_PATH = '/autorecord/creds/tokenDrive.pickle'
-CREDS_PATH = '/autorecord/creds/credentials.json'
+TOKEN_PATH = "/autorecord/creds/tokenDrive.pickle"
+CREDS_PATH = "/autorecord/creds/credentials.json"
 
 
 # TODO: try to do it DRY
 def creds_generate():
     global creds
     if os.path.exists(TOKEN_PATH):
-        with open(TOKEN_PATH, 'rb') as token:
+        with open(TOKEN_PATH, "rb") as token:
             creds = pickle.load(token)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                CREDS_PATH, SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(CREDS_PATH, SCOPES)
             creds = flow.run_local_server(port=0)
-        with open(TOKEN_PATH, 'wb') as token:
+        with open(TOKEN_PATH, "wb") as token:
             pickle.dump(creds, token)
 
 
 creds_generate()
-UPLOAD_API_URL = 'https://www.googleapis.com/upload/drive/v3'
-API_URL = 'https://www.googleapis.com/drive/v3'
-HEADERS = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {creds.token}"
-}
+UPLOAD_API_URL = "https://www.googleapis.com/upload/drive/v3"
+API_URL = "https://www.googleapis.com/drive/v3"
+HEADERS = {"Content-Type": "application/json", "Authorization": f"Bearer {creds.token}"}
 
-logger = logging.getLogger('autorecord_logger')
+logger = logging.getLogger("autorecord_logger")
 
 
 def refresh_token():
@@ -63,20 +59,18 @@ def refresh_token():
 
 
 async def upload(file_path: str, folder_id: str) -> str:
-    meta_data = {
-        "name": file_path.split('/')[-1],
-        "parents": [folder_id]
-    }
+    meta_data = {"name": file_path.split("/")[-1], "parents": [folder_id]}
 
     async with ClientSession() as session:
-        async with session.post(f'{UPLOAD_API_URL}/files?uploadType=resumable',
-                                headers={**HEADERS,
-                                         **{"X-Upload-Content-Type": "video/mp4"}},
-                                json=meta_data,
-                                ssl=False) as resp:
-            session_url = resp.headers.get('Location')
+        async with session.post(
+            f"{UPLOAD_API_URL}/files?uploadType=resumable",
+            headers={**HEADERS, **{"X-Upload-Content-Type": "video/mp4"}},
+            json=meta_data,
+            ssl=False,
+        ) as resp:
+            session_url = resp.headers.get("Location")
 
-        async with AIOFile(file_path, 'rb') as afp:
+        async with AIOFile(file_path, "rb") as afp:
             file_size = str(os.stat(file_path).st_size)
             reader = Reader(afp, chunk_size=256 * 1024 * 100)  # 25MB
             received_bytes_lower = 0
@@ -84,76 +78,89 @@ async def upload(file_path: str, folder_id: str) -> str:
                 chunk_size = len(chunk)
                 chunk_range = f"bytes {received_bytes_lower}-{received_bytes_lower + chunk_size - 1}"
 
-                async with session.put(session_url, data=chunk, ssl=False,
-                                       headers={"Content-Length": str(chunk_size),
-                                                "Content-Range": f"{chunk_range}/{file_size}"}) as resp:
-                    chunk_range = resp.headers.get('Range')
+                async with session.put(
+                    session_url,
+                    data=chunk,
+                    ssl=False,
+                    headers={
+                        "Content-Length": str(chunk_size),
+                        "Content-Range": f"{chunk_range}/{file_size}",
+                    },
+                ) as resp:
+                    chunk_range = resp.headers.get("Range")
+
+                    try:
+                        resp_json = await resp.json()
+                        drive_file_id = resp_json["id"]
+                    except Exception:
+                        pass
+
                     if chunk_range is None:
                         break
 
-                    _, bytes_data = chunk_range.split('=')
-                    _, received_bytes_lower = bytes_data.split('-')
+                    _, bytes_data = chunk_range.split("=")
+                    _, received_bytes_lower = bytes_data.split("-")
                     received_bytes_lower = int(received_bytes_lower) + 1
 
-    logger.info(
-        f'Uploaded {file_path}')
+    logger.info(f"Uploaded {file_path}")
+
+    return drive_file_id
 
 
-async def create_folder(folder_name: str, folder_parent_id: str = '') -> str:
+async def create_folder(folder_name: str, folder_parent_id: str = "") -> str:
     """
     Creates folder in format: 'folder_name'
     """
     logger.info(
-        f'Creating folder with name {folder_name} inside folder with id {folder_parent_id}')
+        f"Creating folder with name {folder_name} inside folder with id {folder_parent_id}"
+    )
 
-    meta_data = {
-        'name': folder_name,
-        'mimeType': 'application/vnd.google-apps.folder'
-    }
+    meta_data = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
     if folder_parent_id:
-        meta_data['parents'] = [folder_parent_id]
+        meta_data["parents"] = [folder_parent_id]
 
     async with ClientSession() as session:
-        async with session.post(f'{API_URL}/files',
-                                headers=HEADERS,
-                                json=meta_data,
-                                ssl=False) as resp:
+        async with session.post(
+            f"{API_URL}/files", headers=HEADERS, json=meta_data, ssl=False
+        ) as resp:
 
             resp_json = await resp.json()
-            folder_id = resp_json['id']
+            folder_id = resp_json["id"]
 
-        new_perm = {
-            'type': 'anyone',
-            'role': 'reader'
-        }
+        new_perm = {"type": "anyone", "role": "reader"}
 
-        async with session.post(f'{API_URL}/files/{folder_id}/permissions',
-                                headers=HEADERS,
-                                json=new_perm,
-                                ssl=False) as resp:
+        async with session.post(
+            f"{API_URL}/files/{folder_id}/permissions",
+            headers=HEADERS,
+            json=new_perm,
+            ssl=False,
+        ) as resp:
             pass
 
     return f"https://drive.google.com/drive/u/1/folders/{folder_id}"
 
 
 async def get_folder_by_name(name: str) -> dict:
-    logger.info(f'Getting the id of folder with name {name}')
+    logger.info(f"Getting the id of folder with name {name}")
 
     params = dict(
-        fields='nextPageToken, files(name, id, parents)',
+        fields="nextPageToken, files(name, id, parents)",
         q=f"mimeType='application/vnd.google-apps.folder'and name='{name}'",
-        spaces='drive'
+        spaces="drive",
     )
     folders = []
-    page_token = ''
+    page_token = ""
 
     async with ClientSession() as session:
         while page_token != False:
-            async with session.get(f'{API_URL}/files?pageToken={page_token}',
-                                   headers=HEADERS, params=params,
-                                   ssl=False) as resp:
+            async with session.get(
+                f"{API_URL}/files?pageToken={page_token}",
+                headers=HEADERS,
+                params=params,
+                ssl=False,
+            ) as resp:
                 resp_json = await resp.json()
-                folders.extend(resp_json.get('files', []))
-                page_token = resp_json.get('nextPageToken', False)
+                folders.extend(resp_json.get("files", []))
+                page_token = resp_json.get("nextPageToken", False)
 
-    return {folder['id']: folder.get('parents', []) for folder in folders}
+    return {folder["id"]: folder.get("parents", []) for folder in folders}
