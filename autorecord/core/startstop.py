@@ -273,7 +273,7 @@ class RecordHandler:
                 room_name=room_name,
                 date=str(record_datetime.date()),
                 start_time=str(record_datetime.time()),
-                end_time=str(record_datetime.time() + timedelta(minutes=30)),
+                end_time=str((record_datetime + timedelta(minutes=30)).time()),
                 record_url=f"https://drive.google.com/file/d/{file_id}/preview",
             )
         except FileNotFoundError:
