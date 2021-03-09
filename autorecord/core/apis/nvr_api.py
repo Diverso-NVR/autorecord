@@ -25,7 +25,7 @@ async def send_record(
                 "start_time": start_time,
                 "end_time": end_time,
                 "url": record_url,
-                "type": "Offline",
+                "type": "Autorecord",
             },
             headers={"key": NVR_API_KEY},
             ssl=False,
