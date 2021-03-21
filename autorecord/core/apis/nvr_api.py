@@ -1,12 +1,10 @@
-import os
-from aiohttp import ClientSession
-import logging
+from httpx import AsyncClient
+from loguru import logger
 
+from autorecord.core.settings import config
 
-NVR_API_URL = "https://nvr.miem.hse.ru/api/erudite"
-NVR_API_KEY = os.getenv("NVR_API_KEY")
-
-logger = logging.getLogger("fileuploader")
+NVR_API_URL = config.nvr_api_url
+NVR_API_KEY = config.nvr_api_key
 
 
 async def send_record(
@@ -16,18 +14,20 @@ async def send_record(
     end_time: str,
     record_url: str,
 ):
-    async with ClientSession() as session:
-        async with session.post(
+    data = {
+        "room_name": room_name,
+        "date": date,
+        "start_time": start_time,
+        "end_time": end_time,
+        "url": record_url,
+        "type": "Autorecord",
+    }
+
+    async with AsyncClient() as client:
+        resp = await client.post(
             f"{NVR_API_URL}/records",
-            json={
-                "room_name": room_name,
-                "date": date,
-                "start_time": start_time,
-                "end_time": end_time,
-                "url": record_url,
-                "type": "Autorecord",
-            },
+            json=data,
             headers={"key": NVR_API_KEY},
-            ssl=False,
-        ) as resp:
-            logger.info(f"Erudite response: {await resp.json()}")
+        )
+
+    logger.info(f"Erudite response: {resp.json()}")
