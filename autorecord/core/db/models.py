@@ -46,7 +46,7 @@ class Room(Base, CommonMixin):
 
     auto_control = Column(Boolean, default=True)
 
-    sources = relationship("Source", backref="room")
+    sources = relationship("Source", backref="room", lazy=False)
 
     organization_id = Column(Integer, ForeignKey("organizations.id"))
 
