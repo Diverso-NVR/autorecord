@@ -171,3 +171,6 @@ class GoogleDrive(GoogleBase):
             page_token = resp_json.get("nextPageToken", False)
 
         return {folder["id"]: folder.get("parents", []) for folder in folders}
+
+
+gdrive = GoogleDrive()
