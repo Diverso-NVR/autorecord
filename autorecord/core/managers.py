@@ -36,9 +36,7 @@ class Recorder:
         self.record_processes = []
 
         self.record_dt = datetime.now(tz=pytz.timezone("Europe/Moscow"))
-        self.record_name = (
-            self.record_dt.isoformat(timespec="minutes") + f"_{room.name}"
-        )
+        self.record_name = self.record_dt.isoformat(timespec="minutes") + f"_{room.id}"
 
     async def start_record(self):
         sound_source_rtsp = self.room.sound_source.rtsp
