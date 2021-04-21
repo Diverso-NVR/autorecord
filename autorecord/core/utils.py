@@ -1,7 +1,6 @@
 import os
-import trio
-from subprocess import PIPE
-
+import asyncio
+from asyncio.subprocess import PIPE
 
 from loguru import logger
 
@@ -17,7 +16,15 @@ async def run_cmd(cmd: str or list):
     if isinstance(cmd, str):
         cmd = cmd.split(" ")
 
-    return await trio.open_process(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    return await asyncio.create_subprocess_exec(
+        *cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE
+    )
+
+
+async def process_stop(process):
+    if process.returncode is None:
+        process.terminate()
+        await process.wait()
 
 
 def remove_file(filename: str) -> None:

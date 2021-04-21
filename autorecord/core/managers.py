@@ -1,10 +1,13 @@
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
+import asyncio
 
 import pytz
+from loguru import logger
 
-from autorecord.core.utils import run_cmd, remove_file
-from autorecord.core.apis.drive_api import gdrive
+from autorecord.core.utils import run_cmd, process_stop, remove_file
+from autorecord.core.apis.drive_api import GoogleDrive
 from autorecord.core.apis.nvr_api import send_record
 from autorecord.core.settings import config
 
@@ -25,7 +28,7 @@ FFMPEG_MAP_CMD_TEMPLATE = (
     "{record_name}.aac "
     f"-i {RECORDS_FOLDER}/vid_"
     "{record_name}_{source_id}.mp4 "
-    f"-y -shortest -c copy {RECORDS_FOLDER}"
+    f"-y -shortest -c copy {RECORDS_FOLDER}/"
     "{record_name}_{source_id}.mp4"
 )
 
@@ -35,32 +38,40 @@ class Recorder:
         self.room = room
         self.record_processes = []
 
-        self.record_dt = datetime.now(tz=pytz.timezone("Europe/Moscow"))
+        self.record_dt = datetime.now(tz=pytz.timezone("Europe/Moscow")).replace(
+            tzinfo=None,
+            second=0,
+            microsecond=0,
+        )
         self.record_name = self.record_dt.isoformat(timespec="minutes") + f"_{room.id}"
 
     async def start_record(self):
-        sound_source_rtsp = self.room.sound_source.rtsp
-        sound_record_process = await run_cmd(
-            FFMPEG_SOUND_RECORD_CMD_TEMPLATE.format(
-                source_rtsp=sound_source_rtsp,
-                record_name=self.record_name,
-            )
-        )
-        self.record_processes.append(sound_record_process)
-
-        for source in self.room.sources:
-            video_record_process = await run_cmd(
-                FFMPEG_VIDEO_RECORD_CMD_TEMPLATE.format(
-                    source_rtsp=source.rtsp,
+        sound_source_rtsp = self.room.sound_source
+        self.record_processes = await asyncio.gather(
+            run_cmd(
+                FFMPEG_SOUND_RECORD_CMD_TEMPLATE.format(
+                    source_rtsp=sound_source_rtsp,
                     record_name=self.record_name,
-                    source_id=source.id,
                 )
-            )
-            self.record_processes.append(video_record_process)
+            ),
+            *[
+                run_cmd(
+                    FFMPEG_VIDEO_RECORD_CMD_TEMPLATE.format(
+                        source_rtsp=source.rtsp,
+                        record_name=self.record_name,
+                        source_id=source.id,
+                    )
+                )
+                for source in self.room.sources
+            ],
+        )
+        logger.info(f"Started recording {self.room.name}")
 
-    def stop_record(self):
-        for process in self.record_processes:
-            process.terminate()
+    async def stop_record(self):
+        await asyncio.gather(
+            *[process_stop(process) for process in self.record_processes]
+        )
+        logger.info(f"Stopped recording {self.room.name}")
 
 
 class AudioMapper:
@@ -76,21 +87,21 @@ class AudioMapper:
 
 
 class Uploader:
+    GDRIVE = GoogleDrive()
+
     @staticmethod
-    async def upload(recorder: Recorder, source):
+    async def upload(recorder: Recorder, source, folder_id):
 
         file_path = f"{RECORDS_FOLDER}/{recorder.record_name}_{source.id}.mp4"
-        folder_id = await Uploader.prepare_folders(recorder)
-        try:
-            return await gdrive.upload(file_path, folder_id)
-        finally:
-            Cleaner.clear_video(recorder, source)
+        return await Uploader.GDRIVE.upload(file_path, folder_id)
 
     @staticmethod
     async def prepare_folders(recorder: Recorder):
+        gdrive = Uploader.GDRIVE
+
         room_folder_id = recorder.room.drive.split("/")[-1]
         record_date = str(recorder.record_dt.date())
-        record_time = str(recorder.record_dt.time())
+        record_time = recorder.record_dt.strftime("%H:%M")
 
         folders = await gdrive.get_folder_by_name(record_date)
         for folder_id, folder_parent_ids in folders.items():
@@ -116,6 +127,22 @@ class Publisher:
 
 
 class Cleaner:
+    @staticmethod
+    def is_video_exist(recorder: Recorder, source):
+        if os.path.exists(
+            f"{RECORDS_FOLDER}/vid_{recorder.record_name}_{source.id}.mp4"
+        ):
+            return True
+
+        return False
+
+    @staticmethod
+    def is_sound_exist(recorder: Recorder):
+        if os.path.exists(f"{RECORDS_FOLDER}/sound_{recorder.record_name}.aac"):
+            return True
+
+        return False
+
     @staticmethod
     def clear_sound(recorder: Recorder):
         remove_file(f"{RECORDS_FOLDER}/sound_{recorder.record_name}.aac")

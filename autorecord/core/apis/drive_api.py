@@ -3,7 +3,7 @@ import os
 import pickle
 from typing import List
 
-from httpx import AsyncClient
+from aiohttp import ClientSession
 from aiofile import AIOFile, Reader
 from loguru import logger
 
@@ -19,7 +19,7 @@ class GoogleBase:
     def __init__(self):
         self._creds = None
         self._headers = {"Authorization": ""}
-        self._client = AsyncClient()
+        self._client = ClientSession()
 
     def refresh_token(self) -> None:
         creds = None
@@ -64,12 +64,15 @@ class GoogleDrive(GoogleBase):
 
     @token_check
     async def upload(self, file_path: str, parent_id: str) -> str:
+        logger.info(f"Started uploading {file_path}")
+
         meta_data = {"name": file_path.split("/")[-1], "parents": [parent_id]}
 
         resp = await self._client.post(
             f"{self.UPLOAD_API_URL}/files?uploadType=resumable",
             headers={**self._headers, **{"X-Upload-Content-Type": "video/mp4"}},
             json=meta_data,
+            ssl=False,
         )
         session_url = resp.headers.get("Location")
 
@@ -88,6 +91,7 @@ class GoogleDrive(GoogleBase):
                         "Content-Length": str(chunk_size),
                         "Content-Range": f"{chunk_range}/{file_size}",
                     },
+                    ssl=False,
                 )
                 chunk_range = resp.headers.get("Range")
 
@@ -127,7 +131,10 @@ class GoogleDrive(GoogleBase):
             meta_data["parents"] = [folder_parent_id]
 
             resp = await self._client.post(
-                f"{self.API_URL}/files", headers=self._headers, json=meta_data
+                f"{self.API_URL}/files",
+                headers=self._headers,
+                json=meta_data,
+                ssl=False,
             )
 
             if not emails:
@@ -137,13 +144,14 @@ class GoogleDrive(GoogleBase):
                     {"type": "user", "role": "reader", "emailAddress": email}
                     for email in emails
                 ]
-
-            folder_id = resp.json()["id"]
+            resp_json = await resp.json()
+            folder_id = resp_json["id"]
             for acl in acls:
                 resp = await self._client.post(
                     f"{self.API_URL}/files/{folder_id}/permissions",
                     headers=self._headers,
                     json=acl,
+                    ssl=False,
                 )
 
         return folder_id
@@ -165,12 +173,10 @@ class GoogleDrive(GoogleBase):
                 f"{self.API_URL}/files?pageToken={page_token}",
                 headers=self._headers,
                 params=params,
+                ssl=False,
             )
-            resp_json = resp.json()
+            resp_json = await resp.json()
             folders.extend(resp_json.get("files", []))
             page_token = resp_json.get("nextPageToken", False)
 
         return {folder["id"]: folder.get("parents", []) for folder in folders}
-
-
-gdrive = GoogleDrive()

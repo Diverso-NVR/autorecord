@@ -1,4 +1,4 @@
-from typing import Set, Optional
+from typing import Set
 from pydantic import BaseSettings, Field
 
 
