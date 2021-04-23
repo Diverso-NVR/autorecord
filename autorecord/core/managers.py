@@ -47,30 +47,30 @@ class Recorder:
 
     async def start_record(self):
         sound_source_rtsp = self.room.sound_source
-        self.record_processes = await asyncio.gather(
-            run_cmd(
-                FFMPEG_SOUND_RECORD_CMD_TEMPLATE.format(
-                    source_rtsp=sound_source_rtsp,
-                    record_name=self.record_name,
-                )
-            ),
-            *[
-                run_cmd(
-                    FFMPEG_VIDEO_RECORD_CMD_TEMPLATE.format(
-                        source_rtsp=source.rtsp,
-                        record_name=self.record_name,
-                        source_id=source.id,
-                    )
-                )
-                for source in self.room.sources
-            ],
+        sound_proc = await run_cmd(
+            FFMPEG_SOUND_RECORD_CMD_TEMPLATE.format(
+                source_rtsp=sound_source_rtsp,
+                record_name=self.record_name,
+            )
         )
+        self.record_processes.append(sound_proc)
+
+        for source in self.room.sources:
+            proc = await run_cmd(
+                FFMPEG_VIDEO_RECORD_CMD_TEMPLATE.format(
+                    source_rtsp=source.rtsp,
+                    record_name=self.record_name,
+                    source_id=source.id,
+                )
+            )
+            self.record_processes.append(proc)
+
         logger.info(f"Started recording {self.room.name}")
 
     async def stop_record(self):
-        await asyncio.gather(
-            *[process_stop(process) for process in self.record_processes]
-        )
+        for process in self.record_processes:
+            await process_stop(process)
+
         logger.info(f"Stopped recording {self.room.name}")
 
 
@@ -128,6 +128,13 @@ class Publisher:
 
 class Cleaner:
     @staticmethod
+    def is_result_exist(recorder: Recorder, source):
+        if os.path.exists(f"{RECORDS_FOLDER}/{recorder.record_name}_{source.id}.mp4"):
+            return True
+
+        return False
+
+    @staticmethod
     def is_video_exist(recorder: Recorder, source):
         if os.path.exists(
             f"{RECORDS_FOLDER}/vid_{recorder.record_name}_{source.id}.mp4"
@@ -144,9 +151,13 @@ class Cleaner:
         return False
 
     @staticmethod
-    def clear_sound(recorder: Recorder):
-        remove_file(f"{RECORDS_FOLDER}/sound_{recorder.record_name}.aac")
+    def clear_result(recorder: Recorder, source):
+        remove_file(f"{RECORDS_FOLDER}/{recorder.record_name}_{source.id}.mp4")
 
     @staticmethod
     def clear_video(recorder: Recorder, source):
         remove_file(f"{RECORDS_FOLDER}/vid_{recorder.record_name}_{source.id}.mp4")
+
+    @staticmethod
+    def clear_sound(recorder: Recorder):
+        remove_file(f"{RECORDS_FOLDER}/sound_{recorder.record_name}.aac")
