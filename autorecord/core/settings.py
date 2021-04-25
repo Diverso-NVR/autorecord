@@ -27,6 +27,8 @@ class Settings(BaseSettings):
         30,
         env="RECORD_DURATION",
     )
+    record_start: str = Field("09:30", env="RECORD_START")
+    record_end: str = Field("21:00", env="RECORD_END")
 
     class Config:
         env_file = ".env"
