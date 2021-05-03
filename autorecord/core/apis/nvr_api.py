@@ -1,4 +1,4 @@
-from httpx import AsyncClient
+from aiohttp import ClientSession 
 from loguru import logger
 
 from autorecord.core.settings import config
@@ -23,11 +23,11 @@ async def send_record(
         "type": "Autorecord",
     }
 
-    async with AsyncClient() as client:
-        resp = await client.post(
+    async with ClientSession() as session:
+        resp = await session.post(
             f"{NVR_API_URL}/records",
             json=data,
             headers={"key": NVR_API_KEY},
         )
 
-    logger.info(f"Erudite response: {resp.json()}")
+    logger.info(f"Erudite response: {await resp.json()}")

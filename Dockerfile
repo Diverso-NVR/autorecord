@@ -6,11 +6,11 @@ RUN apt -y update && apt -y install ffmpeg libpq-dev postgresql postgresql-contr
 
 COPY ./autorecord /autorecord
 COPY ./requirements.txt /
+COPY ./.env /
 
 RUN python3.8 -m pip install -r requirements.txt
-RUN mkdir /root/vids
-RUN mkdir /var/log/autorecord
+RUN mkdir /root/records
 
-ENV PYTHONPATH=/autorecord
+ENV PYTHONPATH=/
 
 CMD ["python", "/autorecord/app.py"]
