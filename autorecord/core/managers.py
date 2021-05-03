@@ -115,7 +115,7 @@ class Uploader:
 
 class Publisher:
     @staticmethod
-    async def send_to_erudite(recorder: Recorder, file_id: str):
+    async def send_to_erudite(recorder: Recorder, source, file_id: str):
         await send_record(
             room_name=recorder.room.name,
             date=str(recorder.record_dt.date()),
@@ -124,6 +124,7 @@ class Publisher:
                 (recorder.record_dt + timedelta(minutes=config.record_duration)).time()
             ),
             record_url=f"https://drive.google.com/file/d/{file_id}/preview",
+            camera_ip=source.ip,
         )
 
 

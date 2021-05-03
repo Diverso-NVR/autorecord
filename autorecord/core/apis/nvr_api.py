@@ -13,6 +13,7 @@ async def send_record(
     start_time: str,
     end_time: str,
     record_url: str,
+    camera_ip: str,
 ):
     data = {
         "room_name": room_name,
@@ -21,6 +22,7 @@ async def send_record(
         "end_time": end_time,
         "url": record_url,
         "type": "Autorecord",
+        "camera_ip": camera_ip,
     }
 
     async with ClientSession() as session:

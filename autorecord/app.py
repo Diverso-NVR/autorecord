@@ -66,7 +66,7 @@ class Autorecord:
 
         await AudioMapper.map_video_and_sound(recorder, source)
         file_id = await Uploader.upload(recorder, source, folder_id)
-        # await Publisher.send_to_erudite(recorder, file_id)
+        await Publisher.send_to_erudite(recorder, source, file_id)
 
         await self._loop.run_in_executor(None, Cleaner.clear_video, recorder, source)
         await self._loop.run_in_executor(None, Cleaner.clear_result, recorder, source)
