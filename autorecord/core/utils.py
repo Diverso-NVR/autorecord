@@ -31,6 +31,6 @@ def remove_file(filename: str) -> None:
     try:
         os.remove(filename)
     except FileNotFoundError:
-        logger.warning(f"Failed to remove file {filename}")
+        logger.debug(f"Failed to remove file {filename}")
     except:
-        logger.error(f"Failed to remove file {filename}")
+        logger.debug(f"Failed to remove file {filename}")

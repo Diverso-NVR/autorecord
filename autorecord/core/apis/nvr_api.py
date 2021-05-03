@@ -1,4 +1,4 @@
-from aiohttp import ClientSession 
+from aiohttp import ClientSession
 from loguru import logger
 
 from autorecord.core.settings import config
@@ -30,4 +30,4 @@ async def send_record(
             headers={"key": NVR_API_KEY},
         )
 
-    logger.info(f"Erudite response: {await resp.json()}")
+    logger.debug(f"Erudite response: {await resp.json()}")

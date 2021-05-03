@@ -12,7 +12,8 @@ from autorecord.core.apis.nvr_api import send_record
 from autorecord.core.settings import config
 
 
-RECORDS_FOLDER = str(Path.home()) + "/records"
+RECORDS_FOLDER = config.records_folder
+
 FFMPEG_SOUND_RECORD_CMD_TEMPLATE = (
     "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} "
     f"-y -c:a copy -vn -f mp4 {RECORDS_FOLDER}/sound_"

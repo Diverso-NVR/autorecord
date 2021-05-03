@@ -9,7 +9,7 @@ COPY ./requirements.txt /
 COPY ./.env /
 
 RUN python3.8 -m pip install -r requirements.txt
-RUN mkdir /root/records
+RUN mkdir /records
 
 ENV PYTHONPATH=/
 
