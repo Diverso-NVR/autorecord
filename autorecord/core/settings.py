@@ -3,7 +3,7 @@ from pydantic import BaseSettings, Field
 
 
 class Settings(BaseSettings):
-    google_creds_path: str = Field(..., env="GOOGLE_CREDS_PATH")
+    google_creds_path: str = Field(None, env="GOOGLE_CREDS_PATH")
     google_drive_token_path: str = Field(..., env="GOOGLE_DRIVE_TOKEN_PATH")
     google_drive_scopes: Set[str] = Field(..., env="GOOGLE_DRIVE_SCOPES")
 
