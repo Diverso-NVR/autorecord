@@ -14,12 +14,12 @@ class Settings(BaseSettings):
 
     record_days: Set[str] = Field(
         {
-            "monday",
-            "tuesday",
-            "wednesday",
-            "thursday",
-            "friday",
-            "saturday",
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
         },
         env="RECORD_DAYS",
     )
@@ -27,8 +27,8 @@ class Settings(BaseSettings):
         30,
         env="RECORD_DURATION",
     )
-    record_start: str = Field("09:30", env="RECORD_START")
-    record_end: str = Field("21:00", env="RECORD_END")
+    record_start: int = Field(9, env="RECORD_START")
+    record_end: int = Field(21, env="RECORD_END")
     records_folder: str = Field("/records", env="RECORDS_FOLDER")
 
     class Config:

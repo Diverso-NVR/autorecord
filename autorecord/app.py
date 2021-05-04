@@ -1,10 +1,9 @@
 import time
 import asyncio
 from collections import deque
-from threading import Thread
 
 from loguru import logger
-import schedule
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from autorecord.core.settings import config
 from autorecord.core.db import load_rooms
@@ -18,16 +17,33 @@ class Autorecord:
         self._recorders = deque()
         self._loop = loop
 
-        schedule.every(600).seconds.do(self.start_rooms_recordings)
+        self._scheduler = BackgroundScheduler()
+        self._scheduler.add_job(
+            func=self.start_rooms_recordings,
+            name="records",
+            trigger="cron",
+            day_of_week=",".join(config.record_days),
+            hour=f"{config.record_start}-{config.record_end-1}",
+            minute=f"*",
+        )
+        self._scheduler.add_job(
+            func=self.stop_records,
+            name="records_stop",
+            trigger="cron",
+            day_of_week=",".join(config.record_days),
+            hour=config.record_end,
+        )
+        self._scheduler.start()
 
-        # for weekday in config.record_days:
-        #     # TODO: schedule tasks
-        #     pass
+        logger.info(
+            f"Created scheduler tasks: {[str(job) for job in self._scheduler.get_jobs()]}"
+        )
 
     def start_rooms_recordings(self):
+        self.stop_records()
         self._loop.create_task(self.start_records())
 
-    async def start_records(self):
+    def stop_records(self):
         logger.info("Stopping recording")
         recorders_to_process = []
         while self._recorders:
@@ -35,6 +51,10 @@ class Autorecord:
             self._loop.create_task(recorder.stop_record())
             recorders_to_process.append(recorder)
 
+        for recorder in recorders_to_process:
+            self._loop.create_task(self.process_records(recorder))
+
+    async def start_records(self):
         logger.info("Starting recording")
         async for room in load_rooms():
             if not room.sources:
@@ -43,9 +63,6 @@ class Autorecord:
             recorder = Recorder(room)
             self._recorders.append(recorder)
             self._loop.create_task(recorder.start_record())
-
-        for recorder in recorders_to_process:
-            self._loop.create_task(self.process_records(recorder))
 
     async def process_records(self, recorder):
         if not Cleaner.is_sound_exist(recorder):
@@ -71,15 +88,8 @@ class Autorecord:
         await self._loop.run_in_executor(None, Cleaner.clear_video, recorder, source)
         await self._loop.run_in_executor(None, Cleaner.clear_result, recorder, source)
 
-    def run(self):
-        while True:
-            schedule.run_pending()
-            time.sleep(1)
-
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     autorec = Autorecord(loop)
-    autorec.start_rooms_recordings()
-    Thread(target=autorec.run).start()
     loop.run_forever()
