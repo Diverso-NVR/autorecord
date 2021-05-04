@@ -19,7 +19,7 @@ class Autorecord:
 
         self._scheduler = AsyncIOScheduler()
         self._scheduler.add_job(
-            func=self.start_records,
+            func=self.process_records,
             name="records",
             trigger="cron",
             day_of_week=",".join(config.record_days),
@@ -39,15 +39,15 @@ class Autorecord:
             f"Created scheduler tasks: {[str(job) for job in self._scheduler.get_jobs()]}"
         )
 
+    async def process_records(self):
+        self.stop_records()
+        await self.start_records()
+
     def stop_records(self):
         logger.info("Stopping recording")
-        recorders_to_process = []
         while self._recorders:
             recorder = self._recorders.pop()
             self._loop.create_task(recorder.stop_record())
-            recorders_to_process.append(recorder)
-
-        for recorder in recorders_to_process:
             self._loop.create_task(self.process_records(recorder))
 
     async def start_records(self):
