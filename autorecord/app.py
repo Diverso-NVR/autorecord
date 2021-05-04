@@ -1,9 +1,9 @@
-import time
 import asyncio
+import uvloop
 from collections import deque
 
 from loguru import logger
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from autorecord.core.settings import config
 from autorecord.core.db import load_rooms
@@ -17,14 +17,14 @@ class Autorecord:
         self._recorders = deque()
         self._loop = loop
 
-        self._scheduler = BackgroundScheduler()
+        self._scheduler = AsyncIOScheduler()
         self._scheduler.add_job(
-            func=self.start_rooms_recordings,
+            func=self.start_records,
             name="records",
             trigger="cron",
             day_of_week=",".join(config.record_days),
             hour=f"{config.record_start}-{config.record_end-1}",
-            minute=f"*",
+            minute=f"*/{config.record_duration}",
         )
         self._scheduler.add_job(
             func=self.stop_records,
@@ -38,10 +38,6 @@ class Autorecord:
         logger.info(
             f"Created scheduler tasks: {[str(job) for job in self._scheduler.get_jobs()]}"
         )
-
-    def start_rooms_recordings(self):
-        self.stop_records()
-        self._loop.create_task(self.start_records())
 
     def stop_records(self):
         logger.info("Stopping recording")
@@ -90,6 +86,8 @@ class Autorecord:
 
 
 if __name__ == "__main__":
+    uvloop.install()
+
     loop = asyncio.get_event_loop()
     autorec = Autorecord(loop)
     loop.run_forever()
