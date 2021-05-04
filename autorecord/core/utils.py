@@ -4,12 +4,15 @@ from asyncio.subprocess import PIPE
 
 from loguru import logger
 
+from autorecord.core.models import Room
+from autorecord.core.db import get_rooms, get_room_sources
 
-def drange(start: float, stop: float, step: float):
-    r = start
-    while r < stop:
-        yield r
-        r += step
+
+async def load_rooms():
+    rooms = [Room(room_dict) for room_dict in await get_rooms()]
+    for room in rooms:
+        room.sources = await get_room_sources(room.id)
+        yield room
 
 
 async def run_cmd(cmd: str or list):

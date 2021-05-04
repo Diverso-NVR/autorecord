@@ -5,7 +5,7 @@ from loguru import logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from autorecord.core.settings import config
-from autorecord.core.db import load_rooms
+from autorecord.core.utils import load_rooms
 from autorecord.core.managers import Recorder, AudioMapper, Uploader, Publisher, Cleaner
 
 

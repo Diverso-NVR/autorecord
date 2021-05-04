@@ -1,12 +1,12 @@
-from functools import wraps
 import os
 import pickle
 from typing import List
+from functools import wraps
+from asyncio import Semaphore
 
+from loguru import logger
 from aiohttp import ClientSession
 from aiofile import AIOFile, Reader
-from loguru import logger
-
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 
@@ -61,6 +61,7 @@ class GoogleDrive(GoogleBase):
     API_URL = "https://www.googleapis.com/drive/v3"
     SCOPES = config.google_drive_scopes
     TOKEN_PATH = config.google_drive_token_path
+    UPLOAD_LOCK = Semaphore(20)
 
     @token_check
     async def upload(self, file_path: str, parent_id: str) -> str:
@@ -84,15 +85,16 @@ class GoogleDrive(GoogleBase):
                 chunk_size = len(chunk)
                 chunk_range = f"bytes {received_bytes_lower}-{received_bytes_lower + chunk_size - 1}"
 
-                resp = await self._client.put(
-                    session_url,
-                    data=chunk,
-                    headers={
-                        "Content-Length": str(chunk_size),
-                        "Content-Range": f"{chunk_range}/{file_size}",
-                    },
-                    ssl=False,
-                )
+                with self.UPLOAD_LOCK:
+                    resp = await self._client.put(
+                        session_url,
+                        data=chunk,
+                        headers={
+                            "Content-Length": str(chunk_size),
+                            "Content-Range": f"{chunk_range}/{file_size}",
+                        },
+                        ssl=False,
+                    )
                 chunk_range = resp.headers.get("Range")
 
                 try:
