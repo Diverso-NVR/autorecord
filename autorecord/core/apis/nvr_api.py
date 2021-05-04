@@ -27,7 +27,7 @@ async def send_record(
 
     async with ClientSession() as session:
         resp = await session.post(
-            f"{NVR_API_URL}/records",
+            f"{NVR_API_URL}/erudite/records",
             json=data,
             headers={"key": NVR_API_KEY},
         )

@@ -1,5 +1,4 @@
 import asyncio
-import uvloop
 from collections import deque
 
 from loguru import logger
@@ -86,8 +85,6 @@ class Autorecord:
 
 
 if __name__ == "__main__":
-    uvloop.install()
-
     loop = asyncio.get_event_loop()
     autorec = Autorecord(loop)
     loop.run_forever()
