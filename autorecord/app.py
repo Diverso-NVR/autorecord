@@ -68,8 +68,12 @@ class Autorecord:
             return
 
         folder_id = await Uploader.prepare_folders(recorder)
-        for source in recorder.room.sources:
-            await self.process_source(recorder, source, folder_id)
+        await asyncio.gather(
+            *[
+                self.process_source(recorder, source, folder_id)
+                for source in recorder.room.sources
+            ]
+        )
         await self._loop.run_in_executor(None, Cleaner.clear_sound, recorder)
 
     async def process_source(self, recorder, source, folder_id):
