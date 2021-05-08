@@ -11,7 +11,7 @@ from autorecord.core.settings import config
 
 
 RECORDS_FOLDER = config.records_folder
-RECORD_DURATION = config.record_duration
+RECORD_DURATION = config.record_duration * 60
 
 # Шаблон команды ffmpeg для записи видео, в которую подставляются:
 #  – rtsp источника

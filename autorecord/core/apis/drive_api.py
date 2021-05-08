@@ -95,7 +95,7 @@ class GoogleDrive(GoogleBase):
     TOKEN_PATH = config.google_drive_token_path
 
     @token_check
-    @semaphore
+    # @semaphore
     async def upload(self, file_path: str, parent_id: str) -> str:
         """
         Функция загрузки видео на диск.
