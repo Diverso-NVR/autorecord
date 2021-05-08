@@ -60,13 +60,16 @@ class Autorecord:
             self._loop.create_task(recorder.start_record())
 
     async def process_records(self, recorder):
+        """Обработка записей"""
         if not Cleaner.is_sound_exist(recorder) and not config.upload_without_sound:
+            # Если нет звука для рекордера или не выставлен флаг загрузки видео без звука – удаляем все видео рекордера
             for source in recorder.room.sources:
                 await self._loop.run_in_executor(
                     None, Cleaner.clear_video, recorder, source
                 )
             return
 
+        # Создаём папки для загрузки видео
         folder_id = await Uploader.prepare_folders(recorder)
         await asyncio.gather(
             *[
@@ -78,6 +81,7 @@ class Autorecord:
         await self._loop.run_in_executor(None, Cleaner.clear_sound, recorder)
 
     async def process_source(self, recorder, source, folder_id):
+        """Обработка источника"""
         if not Cleaner.is_video_exist(recorder, source):
             return
 

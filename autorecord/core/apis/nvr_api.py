@@ -15,6 +15,16 @@ async def send_record(
     record_url: str,
     camera_ip: str,
 ):
+    """
+    Отправить данные о записи в эрудит
+
+    :param room_name: имя комнаты
+    :param date: дата записи
+    :param start_time: время начала записи
+    :param end_time: время окончания записи
+    :param record_url: ссылка на запись на гугл диске
+    :param camera_ip: ip камеры с которой была запись
+    """
     data = {
         "room_name": room_name,
         "date": date,

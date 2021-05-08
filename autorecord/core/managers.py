@@ -11,17 +11,30 @@ from autorecord.core.settings import config
 
 
 RECORDS_FOLDER = config.records_folder
+RECORD_DURATION = config.record_duration
 
+# Шаблон команды ffmpeg для записи видео, в которую подставляются:
+#  – rtsp источника
+#  – имя комнаты
 FFMPEG_SOUND_RECORD_CMD_TEMPLATE = (
-    "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} -t {duration} "
-    f"-y -c:a copy -vn -f mp4 {RECORDS_FOLDER}/sound_"
+    "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} "
+    f"-t {RECORD_DURATION} -y -c:a copy -vn -f mp4 {RECORDS_FOLDER}/sound_"
     "{record_name}.aac"
 )
+
+# Шаблон команды ffmpeg для записи аудио, в которую подставляются:
+#  – rtsp источника
+#  – имя комнаты
+#  – id источника из бд
 FFMPEG_VIDEO_RECORD_CMD_TEMPLATE = (
-    "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} -t {duration} "
-    f"-y -c:v copy -an -f mp4 {RECORDS_FOLDER}/vid_"
+    "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} "
+    f"-t {RECORD_DURATION} -y -c:v copy -an -f mp4 {RECORDS_FOLDER}/vid_"
     "{record_name}_{source_id}.mp4"
 )
+
+# Шаблон команды ffmpeg для наложения звука на видео, в которую подставляются:
+#  – имя комнаты
+#  – id источника из бд
 FFMPEG_MAP_CMD_TEMPLATE = (
     f"ffmpeg -i {RECORDS_FOLDER}/sound_"
     "{record_name}.aac "
@@ -33,7 +46,17 @@ FFMPEG_MAP_CMD_TEMPLATE = (
 
 
 class Recorder:
+    """Класс для управления процессом записи"""
+
     def __init__(self, room):
+        """
+        Один объект создается на одну комнату.
+        Объект Recorder`а содержит в себе:
+            – комнату, в которой будет записывать
+            – список процессов записи
+            – datetime начала записи
+            – имя записи, составленное из даты и времени записи, и id комнаты
+        """
         self.room = room
         self.record_processes = []
 
@@ -50,7 +73,6 @@ class Recorder:
             FFMPEG_SOUND_RECORD_CMD_TEMPLATE.format(
                 source_rtsp=sound_source_rtsp,
                 record_name=self.record_name,
-                duration=config.record_duration * 60,
             )
         )
         self.record_processes.append(sound_proc)
@@ -61,7 +83,6 @@ class Recorder:
                     source_rtsp=source.rtsp,
                     record_name=self.record_name,
                     source_id=source.id,
-                    duration=config.record_duration * 60,
                 )
             )
             self.record_processes.append(proc)
@@ -76,6 +97,8 @@ class Recorder:
 
 
 class AudioMapper:
+    """Класс последующей обработки видео"""
+
     @staticmethod
     async def map_video_and_sound(recorder: Recorder, source):
         proc = await run_cmd(
@@ -88,11 +111,12 @@ class AudioMapper:
 
 
 class Uploader:
+    """Класс прослойка работы с гуглом"""
+
     GDRIVE = GoogleDrive()
 
     @staticmethod
     async def upload(recorder: Recorder, source, folder_id):
-
         file_path = f"{RECORDS_FOLDER}/{recorder.record_name}_{source.id}.mp4"
         return await Uploader.GDRIVE.upload(file_path, folder_id)
 
@@ -114,6 +138,8 @@ class Uploader:
 
 
 class Publisher:
+    """Класс публикации записей"""
+
     @staticmethod
     async def send_to_erudite(recorder: Recorder, source, file_id: str):
         await send_record(
@@ -129,6 +155,8 @@ class Publisher:
 
 
 class Cleaner:
+    """Класс работы с видео на сервере"""
+
     @staticmethod
     def is_result_exist(recorder: Recorder, source):
         if os.path.exists(f"{RECORDS_FOLDER}/{recorder.record_name}_{source.id}.mp4"):
