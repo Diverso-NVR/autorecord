@@ -30,6 +30,7 @@ async def send_record(
             f"{NVR_API_URL}/erudite/records",
             json=data,
             headers={"key": NVR_API_KEY},
+            ssl=False,
         )
 
     logger.debug(f"Erudite response: {await resp.json()}")

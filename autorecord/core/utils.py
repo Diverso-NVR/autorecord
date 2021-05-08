@@ -24,16 +24,10 @@ async def run_cmd(cmd: str or list):
     )
 
 
-async def process_stop(process):
-    if process.returncode is None:
-        process.terminate()
-        await process.wait()
-
-
 def remove_file(filename: str) -> None:
     try:
         os.remove(filename)
     except FileNotFoundError:
-        logger.debug(f"Failed to remove file {filename}")
-    except:
-        logger.debug(f"Failed to remove file {filename}")
+        logger.debug(f"Failed to remove file {filename}, not found")
+    except Exception as err:
+        logger.warning(f"Failed to remove file {filename}, {err}")

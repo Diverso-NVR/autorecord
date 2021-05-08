@@ -12,6 +12,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 from autorecord.core.settings import config
 
+GOOGLE_SEMAPHORE = Semaphore(config.google_semaphore)
+
 
 class GoogleBase:
     CREDS_PATH = config.google_creds_path
@@ -56,14 +58,23 @@ def token_check(func):
     return wrapper
 
 
+def semaphore(func):
+    @wraps(func)
+    async def wrapper(self, *args, **kwargs):
+        async with GOOGLE_SEMAPHORE:
+            return await func(self, *args, **kwargs)
+
+    return wrapper
+
+
 class GoogleDrive(GoogleBase):
     UPLOAD_API_URL = "https://www.googleapis.com/upload/drive/v3"
     API_URL = "https://www.googleapis.com/drive/v3"
     SCOPES = config.google_drive_scopes
     TOKEN_PATH = config.google_drive_token_path
-    UPLOAD_LOCK = Semaphore(20)
 
     @token_check
+    @semaphore
     async def upload(self, file_path: str, parent_id: str) -> str:
         logger.info(f"Started uploading {file_path}")
 
@@ -85,16 +96,15 @@ class GoogleDrive(GoogleBase):
                 chunk_size = len(chunk)
                 chunk_range = f"bytes {received_bytes_lower}-{received_bytes_lower + chunk_size - 1}"
 
-                with self.UPLOAD_LOCK:
-                    resp = await self._client.put(
-                        session_url,
-                        data=chunk,
-                        headers={
-                            "Content-Length": str(chunk_size),
-                            "Content-Range": f"{chunk_range}/{file_size}",
-                        },
-                        ssl=False,
-                    )
+                resp = await self._client.put(
+                    session_url,
+                    data=chunk,
+                    headers={
+                        "Content-Length": str(chunk_size),
+                        "Content-Range": f"{chunk_range}/{file_size}",
+                    },
+                    ssl=False,
+                )
                 chunk_range = resp.headers.get("Range")
 
                 try:

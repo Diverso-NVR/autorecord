@@ -18,7 +18,7 @@ class Autorecord:
 
         self._scheduler = AsyncIOScheduler()
         self._scheduler.add_job(
-            func=self.manage_records,
+            func=self.restart_records,
             name="records",
             trigger="cron",
             day_of_week=",".join(config.record_days),
@@ -38,7 +38,7 @@ class Autorecord:
             f"Created scheduler tasks: {[str(job) for job in self._scheduler.get_jobs()]}"
         )
 
-    async def manage_records(self):
+    async def restart_records(self):
         self.stop_records()
         await self.start_records()
 
@@ -60,7 +60,7 @@ class Autorecord:
             self._loop.create_task(recorder.start_record())
 
     async def process_records(self, recorder):
-        if not Cleaner.is_sound_exist(recorder):
+        if not Cleaner.is_sound_exist(recorder) and not config.upload_without_sound:
             for source in recorder.room.sources:
                 await self._loop.run_in_executor(
                     None, Cleaner.clear_video, recorder, source
@@ -72,7 +72,8 @@ class Autorecord:
             *[
                 self.process_source(recorder, source, folder_id)
                 for source in recorder.room.sources
-            ]
+            ],
+            return_exceptions=True,
         )
         await self._loop.run_in_executor(None, Cleaner.clear_sound, recorder)
 

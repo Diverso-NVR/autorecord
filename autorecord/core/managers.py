@@ -1,12 +1,10 @@
 import os
 from datetime import datetime, timedelta
-from pathlib import Path
-import asyncio
 
 import pytz
 from loguru import logger
 
-from autorecord.core.utils import run_cmd, process_stop, remove_file
+from autorecord.core.utils import run_cmd, remove_file
 from autorecord.core.apis.drive_api import GoogleDrive
 from autorecord.core.apis.nvr_api import send_record
 from autorecord.core.settings import config
@@ -15,12 +13,12 @@ from autorecord.core.settings import config
 RECORDS_FOLDER = config.records_folder
 
 FFMPEG_SOUND_RECORD_CMD_TEMPLATE = (
-    "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} "
+    "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} -t {duration} "
     f"-y -c:a copy -vn -f mp4 {RECORDS_FOLDER}/sound_"
     "{record_name}.aac"
 )
 FFMPEG_VIDEO_RECORD_CMD_TEMPLATE = (
-    "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} "
+    "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} -t {duration} "
     f"-y -c:v copy -an -f mp4 {RECORDS_FOLDER}/vid_"
     "{record_name}_{source_id}.mp4"
 )
@@ -52,6 +50,7 @@ class Recorder:
             FFMPEG_SOUND_RECORD_CMD_TEMPLATE.format(
                 source_rtsp=sound_source_rtsp,
                 record_name=self.record_name,
+                duration=config.record_duration * 60,
             )
         )
         self.record_processes.append(sound_proc)
@@ -62,6 +61,7 @@ class Recorder:
                     source_rtsp=source.rtsp,
                     record_name=self.record_name,
                     source_id=source.id,
+                    duration=config.record_duration * 60,
                 )
             )
             self.record_processes.append(proc)
@@ -70,7 +70,7 @@ class Recorder:
 
     async def stop_record(self):
         for process in self.record_processes:
-            await process_stop(process)
+            await process.wait()
 
         logger.info(f"Stopped recording {self.room.name}")
 
