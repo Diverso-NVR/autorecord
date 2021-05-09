@@ -1,4 +1,5 @@
 import os
+import signal
 import asyncio
 from asyncio.subprocess import PIPE
 
@@ -34,5 +35,7 @@ def remove_file(filename: str) -> None:
 
 
 async def process_stop(process):
-    process.kill()
-    await process.wait()
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except OSError:
+        os.system(f"kill {process.pid}")

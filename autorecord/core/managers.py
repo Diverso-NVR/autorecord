@@ -90,10 +90,9 @@ class Recorder:
 
         logger.info(f"Started recording {self.room.name}")
 
-    async def stop_record(self):
-        await asyncio.gather(
-            *[process_stop(process) for process in self.record_processes]
-        )
+    def stop_record(self):
+        for process in self.record_processes:
+            process_stop(process)
 
         logger.info(f"Stopped recording {self.room.name}")
 

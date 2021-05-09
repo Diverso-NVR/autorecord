@@ -46,7 +46,7 @@ class Autorecord:
         logger.info("Stopping recording")
         while self._recorders:
             recorder = self._recorders.pop()
-            self._loop.create_task(recorder.stop_record())
+            recorder.stop_record()
             self._loop.create_task(self.process_records(recorder))
 
     async def start_records(self):
