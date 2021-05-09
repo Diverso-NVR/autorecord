@@ -1,5 +1,4 @@
 import os
-import signal
 import asyncio
 from asyncio.subprocess import PIPE
 
@@ -32,10 +31,3 @@ def remove_file(filename: str) -> None:
         logger.debug(f"Failed to remove file {filename}, not found")
     except Exception as err:
         logger.warning(f"Failed to remove file {filename}, {err}")
-
-
-async def process_stop(process):
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except OSError:
-        os.system(f"kill {process.pid}")

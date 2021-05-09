@@ -1,25 +1,24 @@
-import asyncio
 import os
+import asyncio
 from datetime import datetime, timedelta
 
 import pytz
 from loguru import logger
 
-from autorecord.core.utils import run_cmd, remove_file, process_stop
+from autorecord.core.utils import run_cmd, remove_file
 from autorecord.core.apis.drive_api import GoogleDrive
 from autorecord.core.apis.nvr_api import send_record
 from autorecord.core.settings import config
 
 
 RECORDS_FOLDER = config.records_folder
-RECORD_DURATION = config.record_duration * 60
 
 # Шаблон команды ffmpeg для записи видео, в которую подставляются:
 #  – rtsp источника
 #  – имя комнаты
 FFMPEG_SOUND_RECORD_CMD_TEMPLATE = (
     "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} "
-    f"-t {RECORD_DURATION} -y -c:a copy -vn -f mp4 {RECORDS_FOLDER}/sound_"
+    f"-y -c:a copy -vn -f mp4 {RECORDS_FOLDER}/sound_"
     "{record_name}.aac"
 )
 
@@ -29,7 +28,7 @@ FFMPEG_SOUND_RECORD_CMD_TEMPLATE = (
 #  – id источника из бд
 FFMPEG_VIDEO_RECORD_CMD_TEMPLATE = (
     "ffmpeg -use_wallclock_as_timestamps true -rtsp_transport tcp -i {source_rtsp} "
-    f"-t {RECORD_DURATION} -y -c:v copy -an -f mp4 {RECORDS_FOLDER}/vid_"
+    f"-y -c:v copy -an -f mp4 {RECORDS_FOLDER}/vid_"
     "{record_name}_{source_id}.mp4"
 )
 
@@ -90,9 +89,8 @@ class Recorder:
 
         logger.info(f"Started recording {self.room.name}")
 
-    def stop_record(self):
-        for process in self.record_processes:
-            process_stop(process)
+    async def stop_record(self):
+        await asyncio.gather(*[proc.communicate("q") for proc in self.record_processes])
 
         logger.info(f"Stopped recording {self.room.name}")
 
