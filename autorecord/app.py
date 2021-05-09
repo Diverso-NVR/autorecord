@@ -75,10 +75,9 @@ class Autorecord:
             *[
                 self.process_source(recorder, source, folder_id)
                 for source in recorder.room.sources
-            ],
-            return_exceptions=True,
+            ]
         )
-        await self._loop.run_in_executor(None, Cleaner.clear_sound, recorder)
+        # await self._loop.run_in_executor(None, Cleaner.clear_sound, recorder)
 
     async def process_source(self, recorder, source, folder_id):
         """Обработка источника"""
@@ -87,10 +86,10 @@ class Autorecord:
 
         await AudioMapper.map_video_and_sound(recorder, source)
         file_id = await Uploader.upload(recorder, source, folder_id)
-        await Publisher.send_to_erudite(recorder, source, file_id)
+        # await Publisher.send_to_erudite(recorder, source, file_id)
 
-        await self._loop.run_in_executor(None, Cleaner.clear_video, recorder, source)
-        await self._loop.run_in_executor(None, Cleaner.clear_result, recorder, source)
+        # await self._loop.run_in_executor(None, Cleaner.clear_video, recorder, source)
+        # await self._loop.run_in_executor(None, Cleaner.clear_result, recorder, source)
 
 
 if __name__ == "__main__":

@@ -31,3 +31,8 @@ def remove_file(filename: str) -> None:
         logger.debug(f"Failed to remove file {filename}, not found")
     except Exception as err:
         logger.warning(f"Failed to remove file {filename}, {err}")
+
+
+async def process_stop(process):
+    process.kill()
+    await process.wait()

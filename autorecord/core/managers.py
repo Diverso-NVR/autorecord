@@ -1,10 +1,11 @@
+import asyncio
 import os
 from datetime import datetime, timedelta
 
 import pytz
 from loguru import logger
 
-from autorecord.core.utils import run_cmd, remove_file
+from autorecord.core.utils import run_cmd, remove_file, process_stop
 from autorecord.core.apis.drive_api import GoogleDrive
 from autorecord.core.apis.nvr_api import send_record
 from autorecord.core.settings import config
@@ -90,8 +91,9 @@ class Recorder:
         logger.info(f"Started recording {self.room.name}")
 
     async def stop_record(self):
-        for process in self.record_processes:
-            await process.wait()
+        await asyncio.gather(
+            *[process_stop(process) for process in self.record_processes]
+        )
 
         logger.info(f"Stopped recording {self.room.name}")
 
