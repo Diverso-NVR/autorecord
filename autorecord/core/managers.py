@@ -90,7 +90,7 @@ class Recorder:
         logger.info(f"Started recording {self.room.name}")
 
     async def stop_record(self):
-        await asyncio.gather(*[proc.communicate("q") for proc in self.record_processes])
+        await asyncio.gather(*[proc.communicate(b"q") for proc in self.record_processes])
 
         logger.info(f"Stopped recording {self.room.name}")
 
