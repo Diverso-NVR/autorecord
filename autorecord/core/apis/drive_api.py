@@ -1,76 +1,125 @@
-from __future__ import print_function
-
-import logging
-import os.path
 import os
-import json
 import pickle
-import requests
-from datetime import datetime, timedelta
+from typing import List
+from functools import wraps
+from asyncio import Semaphore
 
-import asyncio
+from loguru import logger
 from aiohttp import ClientSession
 from aiofile import AIOFile, Reader
-import concurrent.futures
-
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+
+from autorecord.core.settings import config
+
+GOOGLE_SEMAPHORE = Semaphore(config.google_semaphore)
 
 
-SCOPES = "https://www.googleapis.com/auth/drive"
-"""
-Setting up drive
-"""
-creds = None
-TOKEN_PATH = "/autorecord/creds/tokenDrive.pickle"
-CREDS_PATH = "/autorecord/creds/credentials.json"
+class GoogleBase:
+    """
+    Класс базовой настройки любого гугл сервиса
+    """
+
+    CREDS_PATH = config.google_creds_path
+
+    def __init__(self):
+        self._creds = None
+        self._headers = {"Authorization": ""}
+        self._client = ClientSession()
+
+    def refresh_token(self) -> None:
+        """
+        Пересоздаем токен и сохраняем в файл
+        """
+        creds = None
+
+        if os.path.exists(self.TOKEN_PATH):
+            with open(self.TOKEN_PATH, "rb") as token:
+                creds = pickle.load(token)
+
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    self.CREDS_PATH, self.SCOPES
+                )
+                creds = flow.run_local_server(port=0)
+
+            with open(self.TOKEN_PATH, "wb") as token:
+                pickle.dump(creds, token)
+
+        self._creds = creds
+        self._headers["Authorization"] = f"Bearer {creds.token}"
 
 
-# TODO: try to do it DRY
-def creds_generate():
-    global creds
-    if os.path.exists(TOKEN_PATH):
-        with open(TOKEN_PATH, "rb") as token:
-            creds = pickle.load(token)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CREDS_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_PATH, "wb") as token:
-            pickle.dump(creds, token)
+def token_check(func):
+    """
+    Каждый час токен гугла протухает, поэтому нужно смотреть жив ли он ещё,
+    если нет – создать новый токен
+    """
+
+    @wraps(func)
+    async def wrapper(self, *args, **kwargs):
+        if not self._creds or self._creds.expired:
+            logger.info("Refresh google tokens")
+            self.refresh_token()
+
+        return await func(self, *args, **kwargs)
+
+    return wrapper
 
 
-creds_generate()
-UPLOAD_API_URL = "https://www.googleapis.com/upload/drive/v3"
-API_URL = "https://www.googleapis.com/drive/v3"
-HEADERS = {"Content-Type": "application/json", "Authorization": f"Bearer {creds.token}"}
+def semaphore(func):
+    """
+    Семафора, чтобы не грузить одновременно большое количество видео,
+    иначе сеть будет провисать
+    """
 
-logger = logging.getLogger("autorecord_logger")
+    @wraps(func)
+    async def wrapper(self, *args, **kwargs):
+        async with GOOGLE_SEMAPHORE:
+            return await func(self, *args, **kwargs)
+
+    return wrapper
 
 
-def refresh_token():
-    logger.info("Recreating google creds")
-    creds_generate()
-    HEADERS["Authorization"] = f"Bearer {creds.token}"
+class GoogleDrive(GoogleBase):
+    """
+    Класс работы с гугл драйвом
+    """
 
+    UPLOAD_API_URL = "https://www.googleapis.com/upload/drive/v3"
+    API_URL = "https://www.googleapis.com/drive/v3"
+    SCOPES = config.google_drive_scopes
+    TOKEN_PATH = config.google_drive_token_path
 
-async def upload(file_path: str, folder_id: str) -> str:
-    meta_data = {"name": file_path.split("/")[-1], "parents": [folder_id]}
+    @token_check
+    # @semaphore
+    async def upload(self, file_path: str, parent_id: str) -> str:
+        """
+        Функция загрузки видео на диск.
 
-    async with ClientSession() as session:
-        async with session.post(
-            f"{UPLOAD_API_URL}/files?uploadType=resumable",
-            headers={**HEADERS, **{"X-Upload-Content-Type": "video/mp4"}},
+        :param file_path: путь к файлу на сервере
+        :param parent_id: id папки на гугл диске
+
+        :return: id загруженного файла
+        """
+        logger.info(f"Started uploading {file_path}")
+
+        meta_data = {"name": file_path.split("/")[-1], "parents": [parent_id]}
+
+        # Создание канала передачи видео
+        resp = await self._client.post(
+            f"{self.UPLOAD_API_URL}/files?uploadType=resumable",
+            headers={**self._headers, **{"X-Upload-Content-Type": "video/mp4"}},
             json=meta_data,
             ssl=False,
-        ) as resp:
-            session_url = resp.headers.get("Location")
+        )
+        session_url = resp.headers.get("Location")
 
         async with AIOFile(file_path, "rb") as afp:
+            # Асинхронное чтение файла по частям
             file_size = str(os.stat(file_path).st_size)
             reader = Reader(afp, chunk_size=256 * 1024 * 100)  # 25MB
             received_bytes_lower = 0
@@ -78,89 +127,110 @@ async def upload(file_path: str, folder_id: str) -> str:
                 chunk_size = len(chunk)
                 chunk_range = f"bytes {received_bytes_lower}-{received_bytes_lower + chunk_size - 1}"
 
-                async with session.put(
+                # Отправляем часть данных видео.
+                # Гугл хочет в headers запроса флаги Content-Length и Content-Range
+                # где Content-Length – размер отправляемых данных,
+                # Content-Range – какой кусок данных шлём.
+                resp = await self._client.put(
                     session_url,
                     data=chunk,
-                    ssl=False,
                     headers={
                         "Content-Length": str(chunk_size),
                         "Content-Range": f"{chunk_range}/{file_size}",
                     },
-                ) as resp:
-                    chunk_range = resp.headers.get("Range")
+                    ssl=False,
+                )
+                # В ответ, если файл не до конца загружен гугл присылает тот же Content-Range в хедере Range.
+                # Если файл загружен, то Range не будет
+                chunk_range = resp.headers.get("Range")
 
-                    try:
-                        resp_json = await resp.json()
-                        drive_file_id = resp_json["id"]
-                    except Exception:
-                        pass
+                try:
+                    resp_json = await resp.json()
+                    drive_file_id = resp_json["id"]
+                except Exception:
+                    pass
 
-                    if chunk_range is None:
-                        break
+                if chunk_range is None:
+                    break
 
-                    _, bytes_data = chunk_range.split("=")
-                    _, received_bytes_lower = bytes_data.split("-")
-                    received_bytes_lower = int(received_bytes_lower) + 1
+                # Из Range берём верхнее значение и по нему определяем следующий range
+                _, bytes_data = chunk_range.split("=")
+                _, received_bytes_lower = bytes_data.split("-")
+                received_bytes_lower = int(received_bytes_lower) + 1
 
-    logger.info(f"Uploaded {file_path}")
+        logger.info(f"Uploaded {file_path}")
 
-    return drive_file_id
+        return drive_file_id
 
+    @token_check
+    async def create_folder(
+        self,
+        folder_name: str,
+        folder_parent_id: str = "",
+    ) -> str:
+        """
+        Создаём папку на гугл диске и даём права на просмотр всем в интернете
 
-async def create_folder(folder_name: str, folder_parent_id: str = "") -> str:
-    """
-    Creates folder in format: 'folder_name'
-    """
-    logger.info(
-        f"Creating folder with name {folder_name} inside folder with id {folder_parent_id}"
-    )
+        :param folder_name: имя папки
+        :param folder_parent_id: id родительской папки. Если пустая строка – создаём в корне
+        :return: id созданной папки
+        """
+        logger.info(
+            f"Creating folder with name {folder_name} inside folder with id {folder_parent_id}"
+        )
 
-    meta_data = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
-    if folder_parent_id:
-        meta_data["parents"] = [folder_parent_id]
+        meta_data = {
+            "name": folder_name,
+            "mimeType": "application/vnd.google-apps.folder",
+        }
+        if folder_parent_id:
+            meta_data["parents"] = [folder_parent_id]
 
-    async with ClientSession() as session:
-        async with session.post(
-            f"{API_URL}/files", headers=HEADERS, json=meta_data, ssl=False
-        ) as resp:
-
-            resp_json = await resp.json()
-            folder_id = resp_json["id"]
-
-        new_perm = {"type": "anyone", "role": "reader"}
-
-        async with session.post(
-            f"{API_URL}/files/{folder_id}/permissions",
-            headers=HEADERS,
-            json=new_perm,
+        resp = await self._client.post(
+            f"{self.API_URL}/files",
+            headers=self._headers,
+            json=meta_data,
             ssl=False,
-        ) as resp:
-            pass
+        )
+        resp_json = await resp.json()
+        folder_id = resp_json["id"]
 
-    return f"https://drive.google.com/drive/u/1/folders/{folder_id}"
+        resp = await self._client.post(
+            f"{self.API_URL}/files/{folder_id}/permissions",
+            headers=self._headers,
+            json={"type": "anyone", "role": "reader"},
+            ssl=False,
+        )
 
+        return folder_id
 
-async def get_folder_by_name(name: str) -> dict:
-    logger.info(f"Getting the id of folder with name {name}")
+    @token_check
+    async def get_folder_by_name(self, name: str) -> dict:
+        """
+        Собираем папки на диске по имени
 
-    params = dict(
-        fields="nextPageToken, files(name, id, parents)",
-        q=f"mimeType='application/vnd.google-apps.folder'and name='{name}'",
-        spaces="drive",
-    )
-    folders = []
-    page_token = ""
+        :param name: имя папки
+        :return: словарь id папки: список id родительских папок
+        """
+        logger.info(f"Getting the id of folder with name {name}")
 
-    async with ClientSession() as session:
+        params = dict(
+            fields="nextPageToken, files(name, id, parents)",
+            q=f"mimeType='application/vnd.google-apps.folder'and name='{name}'",
+            spaces="drive",
+        )
+        folders = []
+        page_token = ""
+
         while page_token != False:
-            async with session.get(
-                f"{API_URL}/files?pageToken={page_token}",
-                headers=HEADERS,
+            resp = await self._client.get(
+                f"{self.API_URL}/files?pageToken={page_token}",
+                headers=self._headers,
                 params=params,
                 ssl=False,
-            ) as resp:
-                resp_json = await resp.json()
-                folders.extend(resp_json.get("files", []))
-                page_token = resp_json.get("nextPageToken", False)
+            )
+            resp_json = await resp.json()
+            folders.extend(resp_json.get("files", []))
+            page_token = resp_json.get("nextPageToken", False)
 
-    return {folder["id"]: folder.get("parents", []) for folder in folders}
+        return {folder["id"]: folder.get("parents", []) for folder in folders}
